@@ -1,9 +1,15 @@
 import re
+from enum import Enum
 
-from swebench.metrics.constants import TestStatus
+
+class TestStatus(Enum):
+    FAILED = "FAILED"
+    PASSED = "PASSED"
+    SKIPPED = "SKIPPED"
+    ERROR = "ERROR"
 
 
-def parse_log_pytest(log: str) -> dict:
+def parse_log_pytest(log: str) -> dict[str, str]:
     """
     Parser for test logs generated with PyTest framework
 
@@ -25,7 +31,7 @@ def parse_log_pytest(log: str) -> dict:
     return test_status_map
 
 
-def parse_log_pytest_options(log: str) -> dict:
+def parse_log_pytest_options(log: str) -> dict[str, str]:
     """
     Parser for test logs generated with PyTest framework with options
 
@@ -34,7 +40,7 @@ def parse_log_pytest_options(log: str) -> dict:
     Returns:
         dict: test case to test status mapping
     """
-    option_pattern = re.compile(r'(.*?)\[(.*)\]')
+    option_pattern = re.compile(r"(.*?)\[(.*)\]")
     test_status_map = {}
     for line in log.split("\n"):
         if any([line.startswith(x.value) for x in TestStatus]):
@@ -47,16 +53,16 @@ def parse_log_pytest_options(log: str) -> dict:
             has_option = option_pattern.search(test_case[1])
             if has_option:
                 main, option = has_option.groups()
-                if option.startswith('/') and not option.startswith('//') and '*' not in option:
-                    option = "/" + option.split('/')[-1]
-                test_name = f'{main}[{option}]'
+                if option.startswith("/") and not option.startswith("//") and "*" not in option:
+                    option = "/" + option.split("/")[-1]
+                test_name = f"{main}[{option}]"
             else:
                 test_name = test_case[1]
             test_status_map[test_name] = test_case[0]
     return test_status_map
 
 
-def parse_log_django(log: str) -> dict:
+def parse_log_django(log: str) -> dict[str, str]:
     """
     Parser for test logs generated with Django tester framework
 
@@ -69,9 +75,22 @@ def parse_log_django(log: str) -> dict:
     lines = log.split("\n")
     for line in lines:
         line = line.strip()
-        if line.endswith(" ... ok"):
-            test = line.split(" ... ok")[0]
-            test_status_map[test] = TestStatus.PASSED.value
+
+        # This isn't ideal but the test output spans multiple lines
+        if "--version is equivalent to version" in line:
+            test_status_map["--version is equivalent to version"] = TestStatus.PASSED.value
+
+        pass_suffixes = (" ... ok", " ... OK", " ...  OK")
+        for suffix in pass_suffixes:
+            if line.endswith(suffix):
+                # TODO: Temporary, exclusive fix for django__django-7188
+                # The proper fix should involve somehow getting the test results to
+                # print on a separate line, rather than the same line
+                if line.strip().startswith("Applying sites.0002_alter_domain_unique...test_no_migrations"):
+                    line = line.split("...", 1)[-1].strip()
+                test = line.rsplit(suffix, 1)[0]
+                test_status_map[test] = TestStatus.PASSED.value
+                break
         if " ... skipped" in line:
             test = line.split(" ... skipped")[0]
             test_status_map[test] = TestStatus.SKIPPED.value
@@ -87,10 +106,27 @@ def parse_log_django(log: str) -> dict:
         if line.startswith("ERROR:"):
             test = line.split()[1].strip()
             test_status_map[test] = TestStatus.ERROR.value
+
+    # TODO: This is very brittle, we should do better
+    # There's a bug in the django logger, such that sometimes a test output near the end gets
+    # interrupted by a particular long multiline print statement.
+    # We have observed this in one of 3 forms:
+    # - "{test_name} ... Testing against Django installed in {*} silenced.\nok"
+    # - "{test_name} ... Internal Server Error: \/(.*)\/\nok"
+    # - "{test_name} ... System check identified no issues (0 silenced).\nok"
+    patterns = [
+        r"^(.*?)\s\.\.\.\sTesting\ against\ Django\ installed\ in\ ((?s:.*?))\ silenced\)\.\nok$",
+        r"^(.*?)\s\.\.\.\sInternal\ Server\ Error:\ \/(.*)\/\nok$",
+        r"^(.*?)\s\.\.\.\sSystem check identified no issues \(0 silenced\)\nok$"
+    ]
+    for pattern in patterns:
+        for match in re.finditer(pattern, log, re.MULTILINE):
+            test_name = match.group(1)
+            test_status_map[test_name] = TestStatus.PASSED.value
     return test_status_map
 
 
-def parse_log_pytest_v2(log):
+def parse_log_pytest_v2(log: str) -> dict[str, str]:
     """
     Parser for test logs generated with PyTest framework (Later Version)
 
@@ -113,7 +149,7 @@ def parse_log_pytest_v2(log):
     return test_status_map
 
 
-def parse_log_seaborn(log):
+def parse_log_seaborn(log: str) -> dict[str, str]:
     """
     Parser for test logs generated with seaborn testing framework
 
@@ -139,7 +175,7 @@ def parse_log_seaborn(log):
     return test_status_map
 
 
-def parse_log_sympy(log):
+def parse_log_sympy(log: str) -> dict[str, str]:
     """
     Parser for test logs generated with Sympy framework
 
@@ -169,10 +205,33 @@ def parse_log_sympy(log):
     return test_status_map
 
 
+def parse_log_matplotlib(log: str) -> dict[str, str]:
+    """
+    Parser for test logs generated with PyTest framework
+
+    Args:
+        log (str): log content
+    Returns:
+        dict: test case to test status mapping
+    """
+    test_status_map = {}
+    for line in log.split("\n"):
+        line = line.replace("MouseButton.LEFT", "1")
+        line = line.replace("MouseButton.RIGHT", "3")
+        if any([line.startswith(x.value) for x in TestStatus]):
+            # Additional parsing for FAILED status
+            if line.startswith(TestStatus.FAILED.value):
+                line = line.replace(" - ", " ")
+            test_case = line.split()
+            if len(test_case) <= 1:
+                continue
+            test_status_map[test_case[1]] = test_case[0]
+    return test_status_map
+
+
 parse_log_astroid = parse_log_pytest
 parse_log_flask = parse_log_pytest
 parse_log_marshmallow = parse_log_pytest
-parse_log_matplotlib = parse_log_pytest
 parse_log_pvlib = parse_log_pytest
 parse_log_pyvista = parse_log_pytest
 parse_log_sqlfluff = parse_log_pytest
