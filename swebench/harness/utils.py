@@ -20,6 +20,15 @@ from unidiff import PatchSet
 
 load_dotenv()
 
+INSTANCE_IDS_TO_EXCLUDE = [
+    # SWE-Bench Lite
+    "matplotlib__matplotlib-23964",  # hangs
+    "psf__requests-1963",  # test failure on gold patch
+    "psf__requests-2674",  # test failure on gold patch
+    "pydata__xarray-4094",  # test failure on gold patch
+    "pydata__xarray-4493",  # test failure on gold patch
+]
+
 
 class EvaluationError(Exception):
     def __init__(self, instance_id, message, logger):
@@ -48,6 +57,7 @@ def get_predictions_from_file(predictions_path: str, dataset_name: str, split: s
                 KEY_MODEL: "gold",
             }
             for datum in dataset
+            if datum[KEY_INSTANCE_ID] not in INSTANCE_IDS_TO_EXCLUDE
         ]
     if predictions_path.endswith(".json"):
         with open(predictions_path, "r") as f:
