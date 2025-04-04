@@ -860,6 +860,37 @@ SPECS_MARSHMALLOW = {
     ]
 }
 
+SPECS_LANGCHAIN = {
+    k: {
+        "python": "3.9",
+        "pip_packages": ["pytest", "pytest-cov", "syrupy", "flake8", "langchain-core", "httpx", "pytest-asyncio","httpx-sse", "tokenizers", "openai", 'tiktoken'],
+        "install": "python -m pip install -e . || python -m pip install -e ./libs/core",
+        "test_cmd": TEST_PYTEST,
+    }
+    for k in [None,"0.3.2"]
+}
+
+SPECS_OPENAI = {
+    k: {
+        "python": "3.9",
+        "pip_packages": ["pytest", "pytest-cov", "syrupy", "flake8", "langchain-core", "httpx", "pytest-asyncio","httpx-sse", "tokenizers", 'tiktoken'],
+        "install": "python -m pip install -e . ",
+        "test_cmd": TEST_PYTEST,
+    }
+    for k in [None,"0.3.2"]
+}
+
+SPECS_TRANSFORMERS = {
+    k: {
+        "python": "3.9",
+        "install": "python -m pip install -e . ",
+        "test_cmd": TEST_PYTEST,
+    }
+    for k in [
+        None,
+    ]
+}
+
 SPECS_PVLIB = {
     k: {
         "python": "3.9",
@@ -924,6 +955,9 @@ MAP_REPO_VERSION_TO_SPECS_PY = {
     "sqlfluff/sqlfluff": SPECS_SQLFLUFF,
     "swe-bench/humaneval": SPECS_HUMANEVAL,
     "sympy/sympy": SPECS_SYMPY,
+    "langchain-ai/langchain": SPECS_LANGCHAIN,
+    "openai/openai-python": SPECS_OPENAI,
+    "huggingface/transformers": SPECS_TRANSFORMERS,
 }
 
 # Constants - Repository Specific Installation Instructions

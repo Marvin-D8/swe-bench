@@ -46,16 +46,15 @@ setuptools.setup(
     extras_require={
         "inference": [
             "anthropic",
-            "flash_attn",
+            #"flash_attn",
             "jedi",
             "openai",
-            "peft",
+            #"peft",
             "protobuf",
             "sentencepiece",
             "tiktoken",
-            "torch",
-            "transformers",
-            "triton",
+            #"transformers",
+            #"triton",
         ],
         "test": [
             "pytest",

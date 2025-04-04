@@ -2,6 +2,8 @@
 
 """
 Create a dataset for text-to-text training from the raw task instance outputs.
+python swebench/inference/make_datasets/create_text_dataset.py --dataset_name_or_path=princeton-nlp/SWE-bench_Lite --split=dev --output_dir=outputs --retrieval_file=retrieval_file.txt
+
 """
 
 import json
@@ -10,6 +12,7 @@ import os
 from argparse import ArgumentParser
 from pathlib import Path
 from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
+import dotenv
 from tqdm.auto import tqdm
 
 from swebench.inference.make_datasets.create_instance import (
@@ -21,6 +24,7 @@ from swebench.inference.make_datasets.tokenize_dataset import TOKENIZER_FUNCS
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+dotenv.load_dotenv()
 
 def load_jsonl_file(filename):
     if type(filename) == str:
@@ -181,6 +185,7 @@ def main(
     progress_files = {}
     for split in splits:
         logger.info(f"Processing {split} split")
+        #split_instances = {x["instance_id"]: x for x in dataset[split].take(1)}
         split_instances = {x["instance_id"]: x for x in dataset[split]}
         progress_file = f"{output_file}.{split}.progress.jsonl"
         progress_files[split] = progress_file
@@ -194,6 +199,7 @@ def main(
             max_context_len=max_context_len,
             tokenizer_name=tokenizer_name,
             progress_file=progress_file,
+            verbose=True,
         )
 
     logger.info("Creating final dataset")

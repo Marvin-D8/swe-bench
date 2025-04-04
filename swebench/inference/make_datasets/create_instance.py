@@ -471,7 +471,7 @@ def add_text_inputs(
                             }
 
                         # Generate final text inputs
-                        processed_instance["text_inputs"] = PROMPT_FUNCTIONS[
+                        processed_instance["text"] = PROMPT_FUNCTIONS[
                             prompt_style
                         ](processed_instance)
 
@@ -485,7 +485,7 @@ def add_text_inputs(
                     print(f"Failed on instance {instance_id}", e)
                     traceback.print_exc()
                     # Save failed instance
-                    failed_instance = {**instance, "text_inputs": None}
+                    failed_instance = {**instance, "text": None}
                     progress_file_handle.write(json.dumps(failed_instance) + "\n")
                     progress_file_handle.flush()
                 finally:

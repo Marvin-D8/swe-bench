@@ -1,3 +1,9 @@
+'''
+python swebench/harness/run_evaluation.py --dataset_name=outputs_dbg/SWE-bench_Lite__style-3__fs-oracle --split=dev --instance_ids sqlfluff__sqlfluff-1625 --predictions_path=output_results/gpt-4o__SWE-bench_Lite__style-3__fs-oracle__dev.jsonl --report_dir=reports --run_id=0
+
+python swebench/harness/run_evaluation.py --dataset_name=outputs/tasks/langchain-task-instances.jsonl --split=dev --instance_ids langchain-ai__langchain-30448 --predictions_path=gold --report_dir=outputs/reports --run_id=0 --namespace="" --cache_level="instance"
+'''
+
 from __future__ import annotations
 
 import docker
@@ -10,6 +16,9 @@ if platform.system() == "Linux":
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from pathlib import Path, PurePosixPath
+import dotenv
+
+dotenv.load_dotenv()
 
 from swebench.harness.constants import (
     APPLY_PATCH_FAIL,
@@ -529,6 +538,7 @@ def main(
 
 
 if __name__ == "__main__":
+    
     parser = ArgumentParser(
         description="Run evaluation harness for the given dataset and predictions.",
         formatter_class=ArgumentDefaultsHelpFormatter,
@@ -595,7 +605,7 @@ if __name__ == "__main__":
         "--run_id", type=str, required=True, help="Run ID - identifies the run"
     )
     parser.add_argument(
-        "--namespace", type=str, default="swebench", help="Namespace for images"
+        "--namespace", type=str, default=None, help="Namespace for images. If not None will try to pull images from this namespace."
     )
     parser.add_argument(
         "--instance_image_tag", type=str, default="latest", help="Instance image tag"

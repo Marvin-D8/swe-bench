@@ -131,8 +131,11 @@ def load_swebench_dataset(
     if instance_ids:
         instance_ids = set(instance_ids)
     # Load from local .json/.jsonl file
-    if name.endswith(".json") or name.endswith(".jsonl"):
+    if name.endswith(".json"):
         dataset = json.loads(Path(name).read_text())
+        dataset_ids = {instance[KEY_INSTANCE_ID] for instance in dataset}
+    elif name.endswith(".jsonl"):
+        dataset = [json.loads(line) for line in Path(name).read_text().splitlines()]
         dataset_ids = {instance[KEY_INSTANCE_ID] for instance in dataset}
     else:
         # Load from Hugging Face Datasets

@@ -141,6 +141,21 @@ class TestSpec:
         else:
             raise ValueError(f"Invalid architecture: {self.arch}")
 
+    @property
+    def volumes(self):
+        """
+        Returns the volume configuration for the container.
+        Defaults to mounting src:/testbed/ if not specified in docker_specs.
+        """
+        if 'volumes' in self.docker_specs:
+            return self.docker_specs['volumes']
+        return {
+            'src': {
+                'bind': '/testbed/',
+                'mode': 'rw'
+            }
+        }
+
 
 def get_test_specs_from_dataset(
     dataset: Union[list[SWEbenchInstance], list[TestSpec]],
@@ -194,6 +209,7 @@ def make_test_spec(
 
     env_name = "testbed"
     repo_directory = f"/{env_name}"
+    print(f"repo: {repo}, version: {version}")
     specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
     docker_specs = specs.get("docker_specs", {})
 

@@ -291,9 +291,10 @@ def make_eval_script_list_py(
     apply_test_patch_command = (
         f"git apply -v - <<'{HEREDOC_DELIMITER}'\n{test_patch}\n{HEREDOC_DELIMITER}"
     )
+    version = instance.get("version")
     test_command = " ".join(
         [
-            MAP_REPO_VERSION_TO_SPECS[instance["repo"]][instance["version"]][
+            MAP_REPO_VERSION_TO_SPECS[instance["repo"]][version][
                 "test_cmd"
             ],
             *get_test_directives(instance),
