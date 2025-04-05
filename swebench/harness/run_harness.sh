@@ -1,8 +1,9 @@
 set -x
 
-for id in langchain-ai__langchain-29426 langchain-ai__langchain-30448 langchain-ai__langchain-29942 langchain-ai__langchain-29761
-do
-    echo "Running $id"
-    python -m swebench.harness.run_evaluation --dataset_name=outputs/tasks/langchain-task-instances.jsonl --split=dev --instance_ids $id --predictions_path=gold --report_dir=outputs/reports --run_id=$id --namespace="" --cache_level="base" --force_rebuild=true
-done
+dataset_name="outputs/tasks/transformers-task-instances.jsonl"
+#outputs/tasks/openai-python-task-instances.jsonl
+max_instances=5
+ids=$(python swebench/collect/get_instance_id.py --task=$dataset_name --max_instances=$max_instances)
+run_id=5
+python -m swebench.harness.run_evaluation --dataset_name=$dataset_name --instance_ids $ids --predictions_path=gold --report_dir=outputs/reports --run_id=$run_id --namespace="" --cache_level="base" --force_rebuild=true
 
