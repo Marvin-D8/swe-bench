@@ -152,16 +152,3 @@ If you find our work helpful, please use the following citations.
 MIT. Check `LICENSE.md`.
 
 
-
-curl https://api.openai.com/v1/models \
-  -H "Authorization: Bearer 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" \
-  -H "OpenAI-Organization: org-h8G7PcyqWMp335oocKtXJWJi" \
-  -H "OpenAI-Project: proj_rwgy1rJrSq4EAirHTC5nvkPD"
-
-  curl --proxy 127.0.0.1:8081 https://api.openai.com/v1/models   -H "Authorization: Bearer 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"   -H "OpenAI-Organization: org-h8G7PcyqWMp335oocKtXJWJi"   -H "OpenAI-Project: proj_rwgy1rJrSq4EAirHTC5nvkPD"
-
-
-start VPN
-
- sudo psiphon
-
