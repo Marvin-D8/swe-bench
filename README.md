@@ -150,5 +150,3 @@ If you find our work helpful, please use the following citations.
 
 ## 🪪 License
 MIT. Check `LICENSE.md`.
-
-
