@@ -3,6 +3,7 @@ import re
 import ast
 import chardet
 import subprocess
+import shutil
 from argparse import ArgumentTypeError
 from git import Repo
 from pathlib import Path
@@ -183,7 +184,7 @@ class ContextManager:
 class AutoContextManager(ContextManager):
     """Automatically clones the repo if it doesn't exist"""
 
-    def __init__(self, instance, root_dir=None, verbose=False, token=None):
+    def __init__(self, instance, root_dir=None, verbose=False, token=None, copy_repo_from_host_path=None):
         if token is None:
             token = os.environ.get("GITHUB_TOKEN", "git")
         self.tempdir = None
@@ -192,15 +193,22 @@ class AutoContextManager(ContextManager):
             root_dir = self.tempdir.name
         self.root_dir = root_dir
         repo_dir = os.path.join(self.root_dir, instance["repo"].replace("/", "__"))
+        
         if not os.path.exists(repo_dir):
-            repo_url = (
-                f"https://{token}@github.com/swe-bench-repos/"
-                + instance["repo"].replace("/", "__")
-                + ".git"
-            )
-            if verbose:
-                print(f"Cloning {instance['repo']} to {root_dir}")
-            Repo.clone_from(repo_url, repo_dir)
+            if copy_repo_from_host_path is not None:
+                if verbose:
+                    print(f"Copying {instance['repo']} from {copy_repo_from_host_path} to {root_dir}")
+                shutil.copytree(copy_repo_from_host_path, repo_dir, symlinks=True)
+            else:
+                repo_url = (
+                    f"https://{token}@github.com/"
+                    + instance["repo"]
+                    + ".git"
+                )
+                if verbose:
+                    print(f"Cloning {instance['repo']} to {root_dir}")
+                Repo.clone_from(repo_url, repo_dir)
+        
         super().__init__(repo_dir, instance["base_commit"], verbose=verbose)
         self.instance = instance
 

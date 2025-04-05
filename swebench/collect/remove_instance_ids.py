@@ -12,7 +12,8 @@ import argparse
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=str, help="jsonl file path with tasks", required=True)
-    parser.add_argument("--instance_ids", type=str, help="instance ids to remove", required=True)
+    parser.add_argument("--instance_ids", default="", type=str, help="instance ids to remove", required=False)
+    parser.add_argument("--max_instances", default=None, type=int, help="max instances to remove", required=False)
     args = parser.parse_args()
 
     instance_ids = args.instance_ids.split(",")
@@ -24,6 +25,8 @@ def main():
                 continue
             else:
                 new_dataset.append(instance)
+    if args.max_instances is not None:
+        new_dataset = new_dataset[:args.max_instances]
     with open(f"{args.task.replace('.jsonl', '_cleaned.jsonl')}", "w") as f:
         for instance in new_dataset:
             f.write(json.dumps(instance) + "\n")

@@ -3,6 +3,7 @@
 """
 Create a dataset for text-to-text training from the raw task instance outputs.
 python swebench/inference/make_datasets/create_text_dataset.py --dataset_name_or_path=princeton-nlp/SWE-bench_Lite --split=dev --output_dir=outputs --retrieval_file=retrieval_file.txt
+python swebench/inference/make_datasets/create_text_dataset.py --dataset_name_or_path=outputs/tasks/langchain-task-instances_cleaned.jsonl --split=train --output_dir=outputs/text_datasets/ --retrieval_file=retrieval_file.txt
 
 """
 
@@ -127,6 +128,7 @@ def main(
     max_context_len,
     tokenizer_name,
     push_to_hub_user,
+    copy_repo_from_host_path,
 ):
     # Validate arguments and setup
     hub_token = validate_arguments(
@@ -154,11 +156,14 @@ def main(
             del existing_dataset  # don't store in memory
 
     # Load dataset
-    dataset = (
-        load_from_disk(dataset_name_or_path)
-        if Path(dataset_name_or_path).exists()
-        else load_dataset(dataset_name_or_path)
-    )
+    if Path(dataset_name_or_path).exists():
+        if dataset_name_or_path.endswith(".jsonl"):
+            dataset = load_dataset('json', data_files=dataset_name_or_path)
+        else:
+            dataset = load_from_disk(dataset_name_or_path)
+    else:
+        dataset = load_dataset(dataset_name_or_path)
+        
     logger.info(f"Found {set(dataset.keys())} splits")
     if set(splits) - set(dataset.keys()) != set():
         raise ValueError(f"Unknown splits {set(splits) - set(dataset.keys())}")
@@ -200,6 +205,7 @@ def main(
             tokenizer_name=tokenizer_name,
             progress_file=progress_file,
             verbose=True,
+            copy_repo_from_host_path=copy_repo_from_host_path,
         )
 
     logger.info("Creating final dataset")
@@ -320,5 +326,11 @@ if __name__ == "__main__":
         "--push_to_hub_user",
         type=str,
         help="Username to use for pushing to the Hub. If not provided, will save to disk.",
+    )
+    parser.add_argument(
+        "--copy_repo_from_host_path",
+        type=str,
+        default=None,
+        help="Path to the directory containing the repo to copy from the host.",
     )
     main(**vars(parser.parse_args()))

@@ -69,8 +69,8 @@ MODEL_COST_PER_INPUT = {
     "gpt-4-32k": 0.00006,
     "gpt-4-1106-preview": 0.00001,
     "gpt-4-0125-preview": 0.00001,
-    "gpt-4o": 0.000025,
-    "gpt-4o-2024-08-06": 0.000025,
+    "gpt-4o": 0.0000025,
+    "gpt-4o-2024-08-06": 0.0000025,
 }
 
 # The cost per token for each model output.
@@ -90,8 +90,8 @@ MODEL_COST_PER_OUTPUT = {
     "gpt-4-32k": 0.00012,
     "gpt-4-1106-preview": 0.00003,
     "gpt-4-0125-preview": 0.00003,
-    "gpt-4o": 0.0001,
-    "gpt-4o-2024-08-06": 0.0001,
+    "gpt-4o": 0.000001,
+    "gpt-4o-2024-08-06": 0.000001,
 }
 
 # used for azure
@@ -474,6 +474,7 @@ def main(
     output_dir,
     model_args,
     max_cost,
+    max_instances=None,
 ):
     if shard_id is None and num_shards is not None:
         logger.warning(
@@ -501,7 +502,10 @@ def main(
                 existing_ids.add(instance_id)
     logger.info(f"Read {len(existing_ids)} already completed ids from {output_file}")
     if Path(dataset_name_or_path).exists():
-        dataset = load_from_disk(dataset_name_or_path)
+        if dataset_name_or_path.endswith(".jsonl"):
+            dataset=load_dataset('json', data_files=dataset_name_or_path)
+        else:
+            dataset = load_from_disk(dataset_name_or_path)
     else:
         dataset = load_dataset(dataset_name_or_path)
     if split not in dataset:
@@ -515,6 +519,8 @@ def main(
             desc="Filtering out existing ids",
             load_from_cache_file=False,
         )
+    if max_instances is not None:
+        dataset = dataset.select(range(max_instances))
     if shard_id is not None and num_shards is not None:
         dataset = dataset.shard(num_shards, shard_id, contiguous=True)
     inference_args = {
@@ -545,7 +551,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--split",
         type=str,
-        default="test",
+        default="train",
         help="Dataset split to use",
     )
     parser.add_argument(
@@ -594,6 +600,6 @@ if __name__ == "__main__":
 python swebench/inference/run_api.py --dataset_name_or_path=outputs/SWE-bench_Lite__style-3__fs-oracle --split=dev --model_name_or_path=gpt-4o --output_dir=output_results
 python swebench/inference/run_api.py --dataset_name_or_path=outputs_dbg/SWE-bench_Lite__style-3__fs-oracle --split=dev --model_name_or_path=gpt-4o --output_dir=output_results
 
-python swebench/inference/run_api.py --dataset_name_or_path=outputs/SWE-bench_Lite__style-3__fs-oracle --split=dev --model_name_or_path=gpt-4o --output_dir=output_results
+python swebench/inference/run_api.py --dataset_name_or_path=outputs/text_datasets/outputs__tasks__langchain-task-instances_cleaned.jsonl__style-3__fs-oracle --model_name_or_path=gpt-4o --output_dir=outputs/inference
 
 '''
