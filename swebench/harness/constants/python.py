@@ -885,6 +885,7 @@ SPECS_TRANSFORMERS = {
         "python": "3.9",
         "install": "python -m pip install -e . ",
         "test_cmd": TEST_PYTEST,
+        "copy_repo_from_host_path":"repos/transformers"
     }
     for k in [
         None,

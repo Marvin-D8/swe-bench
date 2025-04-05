@@ -167,24 +167,43 @@ def get_test_directives(instance: SWEbenchInstance) -> list:
 
 
 def make_repo_script_list_py(
-    specs, repo, repo_directory, base_commit, env_name
+    specs, repo, repo_directory, base_commit, env_name, skip_git_clone=False
 ) -> list:
     """
     Create a list of bash commands to set up the repository for testing.
     This is the setup script for the instance image.
+    
+    Args:
+        specs: Repository specifications
+        repo: Repository name
+        repo_directory: Directory to clone repository to
+        base_commit: Base commit to reset to
+        env_name: Conda environment name
+        copy_repo_from_host_path: If not None, copy the repository from the host path to the instance image
     """
-    setup_commands = [
-        f"git clone -o origin https://github.com/{repo} {repo_directory}",
-        f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
-        f"cd {repo_directory}",
-        f"git reset --hard {base_commit}",
-        # Remove the remote so the agent won't see newer commits.
-        "git remote remove origin",
-        # Make sure conda is available for later use
+    setup_commands = []
+    if not skip_git_clone:
+        setup_commands.extend([
+            f"git clone -o origin https://github.com/{repo} {repo_directory}",
+            f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
+            f"cd {repo_directory}",
+            f"git reset --hard {base_commit}",
+            # Remove the remote so the agent won't see newer commits.
+            "git remote remove origin",
+        ])
+    else:
+        setup_commands.extend([
+            f"cd {repo_directory}",
+            f"git reset --hard {base_commit}",
+        ])
+    
+    # Make sure conda is available for later use
+    setup_commands.extend([
         "source /opt/miniconda3/bin/activate",
         f"conda activate {env_name}",
         'echo "Current environment: $CONDA_DEFAULT_ENV"',
-    ]
+    ])
+
     if repo in MAP_REPO_TO_INSTALL:
         setup_commands.append(MAP_REPO_TO_INSTALL[repo])
 

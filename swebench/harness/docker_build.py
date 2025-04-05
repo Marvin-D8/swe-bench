@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import os
 import docker
 import docker.errors
 import logging
@@ -413,6 +413,10 @@ def build_instance_image(
 
     # Build the instance image
     if not image_exists:
+        if test_spec.copy_repo_from_host_path is not None:
+            dst_path=f"{build_dir}/{test_spec.copy_repo_from_host_path}"
+            os.makedirs(dst_path, exist_ok=True)
+            os.system(f"cp -r -T {test_spec.copy_repo_from_host_path} {dst_path}")
         build_image(
             image_name=image_name,
             setup_scripts={
@@ -455,6 +459,7 @@ def build_container(
         remove_image(client, test_spec.instance_image_key, "quiet")
     if not test_spec.is_remote_image:
         build_instance_image(test_spec, client, logger, nocache)
+        print("finished build")
     else:
         try:
             client.images.get(test_spec.instance_image_key)
@@ -475,8 +480,9 @@ def build_container(
 
         # Define arguments for running the container
         run_args = test_spec.docker_specs.get("run_args", {})
+        volumes = test_spec.docker_specs.get("volumes", {})
+        
         cap_add = run_args.get("cap_add", [])
-
         container = client.containers.create(
             image=test_spec.instance_image_key,
             name=test_spec.get_instance_container_name(run_id),
@@ -485,7 +491,7 @@ def build_container(
             command="tail -f /dev/null",
             platform=test_spec.platform,
             cap_add=cap_add,
-            volumes=test_spec.volumes,
+            volumes=volumes,
         )
         logger.info(f"Container for {test_spec.instance_id} created: {container.id}")
         return container

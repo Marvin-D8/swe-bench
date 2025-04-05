@@ -19,6 +19,7 @@ def make_run_report(
     full_dataset: list,
     run_id: str,
     client: Optional[docker.DockerClient] = None,
+    report_dir: str = ".",
 ) -> Path:
     """
     Make a final evaluation and run report of the instances that have been run.
@@ -29,6 +30,7 @@ def make_run_report(
         full_dataset (list): List of all instances
         run_id (str): Run ID
         client (docker.DockerClient): Docker client (optional)
+        report_dir (str): Directory to write the report to (default: ".")
 
     Returns:
         Path to report file
@@ -128,7 +130,7 @@ def make_run_report(
                 "unremoved_images": list(sorted(unremoved_images)),
             }
         )
-    report_file = Path(
+    report_file = Path(report_dir) / (
         list(predictions.values())[0][KEY_MODEL].replace("/", "__")
         + f".{run_id}"
         + ".json"

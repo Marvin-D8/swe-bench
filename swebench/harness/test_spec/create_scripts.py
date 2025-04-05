@@ -11,17 +11,25 @@ from swebench.harness.test_spec.python import (
 from swebench.harness.constants import MAP_REPO_TO_EXT
 
 
-def make_repo_script_list(specs, repo, repo_directory, base_commit, env_name) -> list:
+def make_repo_script_list(specs, repo, repo_directory, base_commit, env_name, skip_git_clone=False) -> list:
     """
     Create a list of bash commands to set up the repository for testing.
     This is the setup script for the instance image.
+    
+    Args:
+        specs: Repository specifications
+        repo: Repository name
+        repo_directory: Directory to clone repository to
+        base_commit: Base commit to reset to
+        env_name: Conda environment name
+        copy_repo_from_host_path: If not None, copy the repository from the host path to the instance image
     """
     ext = MAP_REPO_TO_EXT[repo]
     func = {
         "js": make_repo_script_list_js,
         "py": make_repo_script_list_py,
     }[ext]
-    return func(specs, repo, repo_directory, base_commit, env_name)
+    return func(specs, repo, repo_directory, base_commit, env_name, skip_git_clone)
 
 
 def make_env_script_list(instance, specs, env_name) -> list:

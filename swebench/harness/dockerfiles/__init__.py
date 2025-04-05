@@ -45,7 +45,12 @@ def get_dockerfile_env(platform, arch, language, base_image_key, **kwargs):
     )
 
 
-def get_dockerfile_instance(platform, language, env_image_name):
-    return _DOCKERFILE_INSTANCE[language].format(
-        platform=platform, env_image_name=env_image_name
+def get_dockerfile_instance(platform, language, env_image_name, copy_repo_from_host_path=None):
+    if copy_repo_from_host_path is not None:
+        copy_cmd=f"COPY {copy_repo_from_host_path}/. /testbed/"
+    else:
+        copy_cmd=""
+    docker_file=_DOCKERFILE_INSTANCE[language].format(
+        platform=platform, env_image_name=env_image_name, copy_cmd=copy_cmd
     )
+    return docker_file
