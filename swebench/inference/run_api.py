@@ -594,4 +594,6 @@ if __name__ == "__main__":
 python swebench/inference/run_api.py --dataset_name_or_path=outputs/SWE-bench_Lite__style-3__fs-oracle --split=dev --model_name_or_path=gpt-4o --output_dir=output_results
 python swebench/inference/run_api.py --dataset_name_or_path=outputs_dbg/SWE-bench_Lite__style-3__fs-oracle --split=dev --model_name_or_path=gpt-4o --output_dir=output_results
 
+python swebench/inference/run_api.py --dataset_name_or_path=outputs/SWE-bench_Lite__style-3__fs-oracle --split=dev --model_name_or_path=gpt-4o --output_dir=output_results
+
 '''

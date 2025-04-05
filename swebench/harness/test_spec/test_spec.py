@@ -206,7 +206,6 @@ def make_test_spec(
 
     env_name = "testbed"
     repo_directory = f"/{env_name}"
-    print(f"repo: {repo}, version: {version}")
     specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
     docker_specs = specs.get("docker_specs", {})
     copy_repo_from_host_path = specs.get("copy_repo_from_host_path", None)

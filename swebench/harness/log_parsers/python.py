@@ -289,4 +289,5 @@ MAP_REPO_TO_PARSER_PY = {
     "langchain-ai/langchain": parse_log_pytest_v2,
     "openai/openai-python": parse_log_pytest_v2,
     "huggingface/transformers": parse_log_pytest_v2,
+    "pydantic/pydantic-ai": parse_log_pytest_v2,
 }

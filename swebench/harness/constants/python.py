@@ -866,6 +866,7 @@ SPECS_LANGCHAIN = {
         "pip_packages": ["pytest", "pytest-cov", "syrupy", "flake8", "langchain-core", "httpx", "pytest-asyncio","httpx-sse", "tokenizers", "openai", 'tiktoken'],
         "install": "python -m pip install -e . || python -m pip install -e ./libs/core",
         "test_cmd": TEST_PYTEST,
+        "copy_repo_from_host_path":"repos/langchain"
     }
     for k in [None,"0.3.2"]
 }
@@ -876,6 +877,7 @@ SPECS_OPENAI = {
         "pip_packages": ["pytest", "pytest-cov", "syrupy", "flake8", "langchain-core", "httpx", "pytest-asyncio","httpx-sse", "tokenizers", 'tiktoken'],
         "install": "python -m pip install -e . ",
         "test_cmd": TEST_PYTEST,
+        "copy_repo_from_host_path":"repos/openai-python"
     }
     for k in [None,"0.3.2"]
 }
@@ -891,6 +893,19 @@ SPECS_TRANSFORMERS = {
         None,
     ]
 }
+
+SPECS_PYDANTIC = {
+    k: {
+        "python": "3.9",
+        "install": "python -m pip install -e . ",
+        "test_cmd": TEST_PYTEST,
+        "copy_repo_from_host_path":"repos/pydantic-ai"
+    }
+    for k in [
+        None,
+    ]
+}
+
 
 SPECS_PVLIB = {
     k: {
@@ -956,9 +971,11 @@ MAP_REPO_VERSION_TO_SPECS_PY = {
     "sqlfluff/sqlfluff": SPECS_SQLFLUFF,
     "swe-bench/humaneval": SPECS_HUMANEVAL,
     "sympy/sympy": SPECS_SYMPY,
+    # tests added by sergey kochetkov
     "langchain-ai/langchain": SPECS_LANGCHAIN,
     "openai/openai-python": SPECS_OPENAI,
     "huggingface/transformers": SPECS_TRANSFORMERS,
+    "pydantic/pydantic-ai": SPECS_PYDANTIC,
 }
 
 # Constants - Repository Specific Installation Instructions
