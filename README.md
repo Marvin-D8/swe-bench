@@ -4,7 +4,7 @@
   </a>
 </p>
 
-<p align="center">|&nbsp;<a href="https://swebench.com/docs/"><strong>Read the Docs</strong></a>&nbsp;|</p>
+<p align="center">|&nbsp;<a href="https://swebench.com/SWE-bench/"><strong>Read the Docs</strong></a>&nbsp;|</p>
 
 <p align="center">
   <a href="docs/other_languages/README_JP.md">日本語</a> |
