@@ -70,6 +70,10 @@ python -m swebench.harness.run_evaluation \
     --instance_ids sympy__sympy-20590 \
     --run_id validate-gold
 ```
+> [!NOTE]
+> If using a MacOS M-series or other ARM-based systems, add `--namespace ''` to the above script.
+> By default, the evaluation script pulls images built for Linux.
+> Adding `--namespace ''` will cause evaluation images to be built locally instead.
 
 ## 💽 Usage
 Evaluate patch predictions on SWE-bench Lite with the following command:
