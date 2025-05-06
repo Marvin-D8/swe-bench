@@ -209,13 +209,11 @@ def main(
 
         with open(progress_files[split]) as f:
             for line in f:
-                datum = json.loads(line)
-                datum = extract_fields(datum)
+                datum = extract_fields(json.loads(line))
+                if not datum:
+                    continue
                 if datum["instance_id"] not in valid_instance_ids:
                     invalid_instances.append(datum["instance_id"])
-                    continue
-                datum = extract_fields(datum)
-                if not datum:
                     continue
                 for key in columns:
                     split_data[key].append(datum.get(key, ""))
