@@ -12,6 +12,7 @@ SWE-bench provides several dataset variants:
 | **SWE-bench Lite** | Smaller subset for quick evaluations | 534 instances | Faster iteration, development |
 | **SWE-bench Verified** | Expert-verified solvable problems | 500 instances | High-quality evaluation |
 | **SWE-bench Multimodal** | Includes screenshots and UI elements | 100 dev instances (500 test) | Testing multimodal capabilities |
+| **SWE-bench Multilingual** | 9 programming languages, 42 repositories | 300 instances | Cross-lingual evaluation |
 
 ## Accessing Datasets
 
@@ -21,17 +22,20 @@ All datasets are available on Hugging Face:
 from datasets import load_dataset
 
 # Load main dataset
-sbf = load_dataset('princeton-nlp/SWE-bench')
+sbf = load_dataset('SWE-bench/SWE-bench')
 
 # Load lite variant
-sbl = load_dataset('princeton-nlp/SWE-bench_Lite')
+sbl = load_dataset('SWE-bench/SWE-bench_Lite')
 
 # Load verified variant
-sbv = load_dataset('princeton-nlp/SWE-bench_Verified', split='test')
+sbv = load_dataset('SWE-bench/SWE-bench_Verified', split='test')
 
 # Load multimodal variant
-sbm_dev = load_dataset('princeton-nlp/SWE-bench_Multimodal', split='dev')
-sbm_test = load_dataset('princeton-nlp/SWE-bench_Multimodal', split='test')
+sbm_dev = load_dataset('SWE-bench/SWE-bench_Multimodal', split='dev')
+sbm_test = load_dataset('SWE-bench/SWE-bench_Multimodal', split='test')
+
+# Load multilingual variant
+sbml = load_dataset('SWE-bench/SWE-bench_Multilingual', split='test')
 ```
 
 ## Dataset Structure

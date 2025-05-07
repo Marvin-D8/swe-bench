@@ -1,5 +1,15 @@
 # Versioning System
 
+!!! note "Create Training Data"
+
+    If you interested in creating tasks for training models to solve software engineering tasks,
+    check out [SWE-smith](https://swesmith.com/) ([Code](https://github.com/SWE-bench/SWE-smith), [Paper](https://swesmith.com/assets/paper.pdf)).
+
+    SWE-smith is a toolkit for creating execution environments and SWE-bench style task instances at scale.
+    
+    It is designed to be highly compatible with [SWE-agent](https://github.com/SWE-agent/SWE-agent),
+    to generate training data, and SWE-bench for evaluation.
+
 ## Overview
 
 SWE-bench assigns each task instance a specific `version` with respect to its repository. This version information is crucial for ensuring reproducible execution-based evaluation, as it determines the exact installation instructions needed for that repository.

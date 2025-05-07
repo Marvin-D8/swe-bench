@@ -1,4 +1,14 @@
 # Data Collection
+
+> [!NOTE]
+> If you interested in creating tasks for training models to solve software engineering tasks,
+> check out [SWE-smith](https://swesmith.com/) ([Code](https://github.com/SWE-bench/SWE-smith), [Paper](https://swesmith.com/assets/paper.pdf)).
+> 
+> SWE-smith is a toolkit for creating execution environments and SWE-bench style task instances at scale.
+> 
+> It is designed to be highly compatible with [SWE-agent](https://github.com/SWE-agent/SWE-agent),
+> to generate training data, and SWE-bench for evaluation.
+
 This folder includes the code for the first two parts of the benchmark construction procedure as described in the paper, specifically 1. Repo selection and data scraping, and 2. Attribute-based filtering.
 
 We include a comprehensive [tutorial](docs/guides/collection.md) that describes the end-to-end procedure for collecting evaluation task instances from PyPI repositories.

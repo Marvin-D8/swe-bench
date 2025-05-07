@@ -8,11 +8,13 @@ SWE-bench is a benchmark for evaluating large language models on real-world soft
 
 ### Which datasets are available?
 
-SWE-bench offers four main datasets:
+SWE-bench offers five main datasets:
+
 - **SWE-bench**: The full benchmark with 2,294 instances
-- **SWE-bench Lite**: A smaller subset with 534 instances
+- **SWE-bench Lite**: A smaller subset with 300 instances
 - **SWE-bench Verified**: 500 instances verified by engineers as solvable
 - **SWE-bench Multimodal**: 100 _development_ instances with screenshots and UI elements (test eval is on [the SWE-bench API](https://www.swe-bench.com/sb-cli).)
+- **SWE-bench Multilingual**: 300 instances spanning 9 languages and 42 repositories
 
 ### How does the evaluation work?
 
