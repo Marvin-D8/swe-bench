@@ -4,7 +4,7 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = "swebench"
-version = "4.0.2"
+dynamic = ["version"]
 authors = [
     {name = "SWE-bench team", email = "support@swebench.com"},
 ]
@@ -77,8 +77,14 @@ docs = [
 ]
 
 [tool.setuptools]
-packages = ["swebench"]
 include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "swebench.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+namespaces = false
 
 [project.urls]
 "Documentation" = "https://github.com/swe-bench/SWE-bench"
