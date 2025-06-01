@@ -85,6 +85,10 @@ def main(
         dataset, instance_ids, client, force_rebuild, namespace, tag
     )
 
+    if len(dataset) == 0:
+        print("All images exist. Nothing left to build.")
+        return 0
+
     # Build images for remaining instances
     successful, failed = build_instance_images(
         client=client,
