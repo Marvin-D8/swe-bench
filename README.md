@@ -156,7 +156,7 @@ If you find our work helpful, please use the following citations.
 }
 ```
 
-## Related projects
+## Our Other Projects
 
 <div align="center">
   <a href="https://github.com/SWE-bench/sb-cli"><img src="docs/assets/sbcli_logo_text_below.svg" alt="sb-cli" height="120px"></a>
