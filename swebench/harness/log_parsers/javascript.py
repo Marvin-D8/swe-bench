@@ -84,12 +84,12 @@ def parse_log_marked(log: str, test_spec: TestSpec) -> dict[str, str]:
     return test_status_map
 
 
-def parse_log_p5js(log_content: str) -> dict[str, str]:
-    def remove_json_blocks(log):
+def parse_log_p5js(log: str, test_spec: TestSpec) -> dict[str, str]:
+    def remove_json_blocks(log_content):
         filtered_lines = []
         in_json_block = False
         in_json_list_block = False
-        for line in log.split("\n"):
+        for line in log_content.split("\n"):
             stripped_line = line.rstrip()  # Remove trailing whitespace
             if stripped_line.endswith("{"):
                 in_json_block = True
@@ -112,18 +112,22 @@ def parse_log_p5js(log_content: str) -> dict[str, str]:
             filtered_lines.append(line)
         return "\n".join(filtered_lines)
 
-    def remove_xml_blocks(log):
+    def remove_xml_blocks(log_content):
         xml_pat = re.compile(r"<(\w+)>[\s\S]*?<\/\1>", re.MULTILINE)
-        match = xml_pat.search(log)
+        match = xml_pat.search(log_content)
         while match:
             # count the number of opening tags in the match
             opening_tags = match.group().count(rf"<{match.group(1)}>") - 1
             opening_tags = max(opening_tags, 0)
             start = match.start()
             end = match.end()
-            log = log[:start] + f"<{match.group(1)}>" * opening_tags + log[end:]
-            match = xml_pat.search(log)
-        return log
+            log_content = (
+                log_content[:start]
+                + f"<{match.group(1)}>" * opening_tags
+                + log_content[end:]
+            )
+            match = xml_pat.search(log_content)
+        return log_content
 
     def is_valid_fail(match):
         last_line_indent = 0
@@ -134,14 +138,14 @@ def parse_log_p5js(log_content: str) -> dict[str, str]:
             last_line_indent = line_indent
         return True
 
-    log_content = ansi_escape(log_content)
-    log_content = remove_json_blocks(log_content)
-    log_content = remove_xml_blocks(log_content)
+    log = ansi_escape(log)
+    log = remove_json_blocks(log)
+    log = remove_xml_blocks(log)
     test_results = {}
 
     # Parse failing tests
     fail_pattern = re.compile(r"^\s*(\d+)\)(.{0,1000}?):", re.MULTILINE | re.DOTALL)
-    for match in fail_pattern.finditer(log_content):
+    for match in fail_pattern.finditer(log):
         if is_valid_fail(match):
             test_names = list(map(str.strip, match.group(2).split("\n")))
             full_name = ":".join(test_names)
