@@ -330,6 +330,7 @@ def get_oracle_filenames(instance):
     source_files = {
         patch_file.source_file.split("a/", 1)[-1]
         for patch_file in unidiff.PatchSet(instance["patch"])
+        if patch_file.source_file != "/dev/null"
     }
     gold_docs = set()
     for source_file in source_files:
