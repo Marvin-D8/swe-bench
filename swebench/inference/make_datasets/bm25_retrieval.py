@@ -5,14 +5,17 @@ import jedi
 import shutil
 import traceback
 import subprocess
-from filelock import FileLock
-from typing import Any
-from datasets import load_from_disk, load_dataset
-from pyserini.search.lucene import LuceneSearcher
-from git import Repo
+from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from tqdm.auto import tqdm
+from typing import Any, Dict, List, Tuple, Set, Optional, Callable
+
 from argparse import ArgumentParser
+from datasets import load_from_disk, load_dataset
+from filelock import FileLock
+from git import Repo
+from pyserini.search.lucene import LuceneSearcher
+from tqdm.auto import tqdm
 
 from swebench.inference.make_datasets.utils import list_files, string_to_bool
 
@@ -23,27 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 class ContextManager:
-    """
-    A context manager for managing a Git repository at a specific commit.
+    """A context manager for managing a Git repository at a specific commit."""
 
-    Args:
-        repo_path (str): The path to the Git repository.
-        base_commit (str): The commit hash to switch to.
-        verbose (bool, optional): Whether to print verbose output. Defaults to False.
-
-    Attributes:
-        repo_path (str): The path to the Git repository.
-        base_commit (str): The commit hash to switch to.
-        verbose (bool): Whether to print verbose output.
-        repo (git.Repo): The Git repository object.
-
-    Methods:
-        __enter__(): Switches to the specified commit and returns the context manager object.
-        get_readme_files(): Returns a list of filenames for all README files in the repository.
-        __exit__(exc_type, exc_val, exc_tb): Does nothing.
-    """
-
-    def __init__(self, repo_path, base_commit, verbose=False):
+    def __init__(self, repo_path: str, base_commit: str, verbose: bool = False):
         self.repo_path = Path(repo_path).resolve().as_posix()
         self.base_commit = base_commit
         self.verbose = verbose
@@ -56,63 +41,64 @@ class ContextManager:
             self.repo.git.reset("--hard", self.base_commit)
             self.repo.git.clean("-fdxq")
         except Exception as e:
-            logger.error(f"Failed to switch to {self.base_commit}")
-            logger.error(e)
-            raise e
+            logger.error(f"Failed to switch to {self.base_commit}: {e}")
+            raise
         return self
 
-    def get_readme_files(self):
-        files = os.listdir(self.repo_path)
-        files = list(filter(lambda x: os.path.isfile(x), files))
-        files = list(filter(lambda x: x.lower().startswith("readme"), files))
+    def get_readme_files(self) -> List[str]:
+        """Returns a list of README filenames in the repository root."""
+        files = [
+            f
+            for f in os.listdir(self.repo_path)
+            if os.path.isfile(os.path.join(self.repo_path, f))
+            and f.lower().startswith("readme")
+        ]
         return files
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
 
 
-def file_name_and_contents(filename, relative_path):
-    text = relative_path + "\n"
-    with open(filename) as f:
-        text += f.read()
-    return text
+def file_name_and_contents(filename: str, relative_path: str) -> str:
+    """Encode document as filename + full file contents."""
+    with open(filename, encoding="utf-8", errors="ignore") as f:
+        return f"{relative_path}\n{f.read()}"
 
 
-def file_name_and_documentation(filename, relative_path):
-    text = relative_path + "\n"
+def file_name_and_documentation(filename: str, relative_path: str) -> str:
+    """Encode document as filename + extracted docstrings."""
+    text = f"{relative_path}\n"
     try:
-        with open(filename) as f:
-            node = ast.parse(f.read())
-        data = ast.get_docstring(node)
-        if data:
-            text += f"{data}"
+        with open(filename, encoding="utf-8", errors="ignore") as f:
+            source = f.read()
+        node = ast.parse(source)
+        module_doc = ast.get_docstring(node)
+        if module_doc:
+            text += module_doc
         for child_node in ast.walk(node):
             if isinstance(
                 child_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
             ):
-                data = ast.get_docstring(child_node)
-                if data:
-                    text += f"\n\n{child_node.name}\n{data}"
+                doc = ast.get_docstring(child_node)
+                if doc:
+                    text += f"\n\n{child_node.name}\n{doc}"
     except Exception as e:
-        logger.error(e)
-        logger.error(f"Failed to parse file {str(filename)}. Using simple filecontent.")
-        with open(filename) as f:
-            text += f.read()
+        logger.error(f"Failed to parse file {filename}: {e}. Using full content.")
+        return file_name_and_contents(filename, relative_path)
     return text
 
 
-def file_name_and_docs_jedi(filename, relative_path):
-    text = relative_path + "\n"
-    with open(filename) as f:
-        source_code = f.read()
+def file_name_and_docs_jedi(filename: str, relative_path: str) -> str:
+    """Encode document as filename + jedi-extracted documentation."""
+    text = f"{relative_path}\n"
     try:
+        with open(filename, encoding="utf-8", errors="ignore") as f:
+            source_code = f.read()
         script = jedi.Script(source_code, path=filename)
         module = script.get_context()
-        docstring = module.docstring()
         text += f"{module.full_name}\n"
-        if docstring:
-            text += f"{docstring}\n\n"
-        abspath = Path(filename).absolute()
+        if module.docstring():
+            text += f"{module.docstring()}\n\n"
         names = [
             name
             for name in script.get_names(
@@ -123,23 +109,20 @@ def file_name_and_docs_jedi(filename, relative_path):
         for name in names:
             try:
                 origin = name.goto(follow_imports=True)[0]
-                if origin.module_name != module.full_name:
-                    continue
-                if name.parent().full_name != module.full_name:
+                if (
+                    origin.module_name != module.full_name
+                    or name.parent().full_name != module.full_name
+                ):
                     if name.type in {"statement", "param"}:
                         continue
-                full_name = name.full_name
-                text += f"{full_name}\n"
-                docstring = name.docstring()
-                if docstring:
-                    text += f"{docstring}\n\n"
-            except:
+                text += f"{name.full_name}\n"
+                if name.docstring():
+                    text += f"{name.docstring()}\n\n"
+            except Exception:
                 continue
     except Exception as e:
-        logger.error(e)
-        logger.error(f"Failed to parse file {str(filename)}. Using simple filecontent.")
-        text = f"{relative_path}\n{source_code}"
-        return text
+        logger.error(f"Failed to parse file {filename}: {e}. Using full content.")
+        return file_name_and_contents(filename, relative_path)
     return text
 
 
@@ -150,88 +133,48 @@ DOCUMENT_ENCODING_FUNCTIONS = {
 }
 
 
-def clone_repo(repo, root_dir, token):
-    """
-    Clones a GitHub repository to a specified directory.
-
-    Args:
-        repo (str): The GitHub repository to clone.
-        root_dir (str): The root directory to clone the repository to.
-        token (str): The GitHub personal access token to use for authentication.
-
-    Returns:
-        Path: The path to the cloned repository directory.
-    """
-    repo_dir = Path(root_dir, f"repo__{repo.replace('/', '__')}")
-
+def clone_repo(repo: str, root_dir: str, token: str) -> Path:
+    """Clones a GitHub repository to a specified directory."""
+    repo_dir = Path(root_dir) / f"repo__{repo.replace('/', '__')}"
     if not repo_dir.exists():
         repo_url = f"https://{token}@github.com/{repo}.git"
-        logger.info(f"Cloning {repo} {os.getpid()}")
+        logger.info(f"Cloning {repo} (PID: {os.getpid()})")
         Repo.clone_from(repo_url, repo_dir)
     return repo_dir
 
 
-def build_documents(repo_dir, commit, document_encoding_func):
-    """
-    Builds a dictionary of documents from a given repository directory and commit.
-
-    Args:
-        repo_dir (str): The path to the repository directory.
-        commit (str): The commit hash to use.
-        document_encoding_func (function): A function that takes a filename and a relative path and returns the encoded document text.
-
-    Returns:
-        dict: A dictionary where the keys are the relative paths of the documents and the values are the encoded document text.
-    """
-    documents = dict()
+def build_documents(
+    repo_dir: str, commit: str, document_encoding_func: Callable[[str, str], str]
+) -> Dict[str, str]:
+    """Builds a dictionary of documents from a repository at a specific commit."""
+    documents = {}
     with ContextManager(repo_dir, commit):
         filenames = list_files(repo_dir, include_tests=False)
         for relative_path in filenames:
             filename = os.path.join(repo_dir, relative_path)
-            text = document_encoding_func(filename, relative_path)
-            documents[relative_path] = text
+            documents[relative_path] = document_encoding_func(filename, relative_path)
     return documents
 
 
 def make_index(
-    repo_dir,
-    root_dir,
-    query,
-    commit,
-    document_encoding_func,
-    python,
-    instance_id,
-):
-    """
-    Builds an index for a given set of documents using Pyserini.
-
-    Args:
-        repo_dir (str): The path to the repository directory.
-        root_dir (str): The path to the root directory.
-        query (str): The query to use for retrieval.
-        commit (str): The commit hash to use for retrieval.
-        document_encoding_func (function): The function to use for encoding documents.
-        python (str): The path to the Python executable.
-        instance_id (int): The ID of the current instance.
-
-    Returns:
-        index_path (Path): The path to the built index.
-    """
-    index_path = Path(root_dir, f"index__{str(instance_id)}", "index")
+    repo_dir: str,
+    root_dir: str,
+    commit: str,
+    document_encoding_func: Callable[[str, str], str],
+    python: str,
+    instance_id: str,
+) -> Path:
+    """Builds a Pyserini index for documents."""
+    index_path = Path(root_dir) / f"index__{instance_id}" / "index"
     if index_path.exists():
         return index_path
-    thread_prefix = f"(pid {os.getpid()}) "
-    documents_path = Path(root_dir, instance_id, "documents.jsonl")
-    if not documents_path.parent.exists():
-        documents_path.parent.mkdir(parents=True)
+    documents_path = Path(root_dir) / instance_id / "documents.jsonl"
+    documents_path.parent.mkdir(parents=True, exist_ok=True)
     documents = build_documents(repo_dir, commit, document_encoding_func)
-    with open(documents_path, "w") as docfile:
+    with open(documents_path, "w", encoding="utf-8") as docfile:
         for relative_path, contents in documents.items():
-            print(
-                json.dumps({"id": relative_path, "contents": contents}),
-                file=docfile,
-                flush=True,
-            )
+            json.dump({"id": relative_path, "contents": contents}, docfile)
+            docfile.write("\n")
     cmd = [
         python,
         "-m",
@@ -243,230 +186,206 @@ def make_index(
         "--threads",
         "2",
         "--input",
-        documents_path.parent.as_posix(),
+        str(documents_path.parent),
         "--index",
-        index_path.as_posix(),
+        str(index_path),
         "--storePositions",
         "--storeDocvectors",
         "--storeRaw",
     ]
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True,
-        )
-        output, error = proc.communicate()
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        thread_prefix = f"(pid {os.getpid()}) "
+        logger.error(f"Failed to build index for {instance_id}: {e.stderr}")
+        raise Exception(f"{thread_prefix}Failed to build index for {instance_id}")
     except KeyboardInterrupt:
-        proc.kill()
         raise KeyboardInterrupt
-    if proc.returncode == 130:
-        logger.warning(thread_prefix + "Process killed by user")
-        raise KeyboardInterrupt
-    if proc.returncode != 0:
-        logger.error(f"return code: {proc.returncode}")
-        raise Exception(
-            thread_prefix
-            + f"Failed to build index for {instance_id} with error {error}"
-        )
     return index_path
 
 
-def get_remaining_instances(instances, output_file):
-    """
-    Filters a list of instances to exclude those that have already been processed and saved in a file.
-
-    Args:
-        instances (List[Dict]): A list of instances, where each instance is a dictionary with an "instance_id" key.
-        output_file (Path): The path to the file where the processed instances are saved.
-
-    Returns:
-        List[Dict]: A list of instances that have not been processed yet.
-    """
-    instance_ids = set()
-    remaining_instances = list()
-    if output_file.exists():
-        with FileLock(output_file.as_posix() + ".lock"):
-            with open(output_file) as f:
-                for line in f:
-                    instance = json.loads(line)
-                    instance_id = instance["instance_id"]
-                    instance_ids.add(instance_id)
-            logger.warning(
-                f"Found {len(instance_ids)} existing instances in {output_file}. Will skip them."
-            )
-    else:
+def get_remaining_instances(instances: List[Dict], output_file: Path) -> List[Dict]:
+    """Filters instances to exclude those already processed."""
+    if not output_file.exists():
         output_file.parent.mkdir(parents=True, exist_ok=True)
         return instances
-    for instance in instances:
-        instance_id = instance["instance_id"]
-        if instance_id not in instance_ids:
-            remaining_instances.append(instance)
-    return remaining_instances
+    processed_ids = set()
+    with FileLock(str(output_file) + ".lock"):
+        with open(output_file, encoding="utf-8") as f:
+            for line in f:
+                instance = json.loads(line)
+                processed_ids.add(instance["instance_id"])
+    logger.warning(f"Found {len(processed_ids)} existing instances. Will skip them.")
+    return [inst for inst in instances if inst["instance_id"] not in processed_ids]
 
 
-def search(instance, index_path):
-    """
-    Searches for relevant documents in the given index for the given instance.
-
-    Args:
-        instance (dict): The instance to search for.
-        index_path (str): The path to the index to search in.
-
-    Returns:
-        dict: A dictionary containing the instance ID and a list of hits, where each hit is a dictionary containing the
-        document ID and its score.
-    """
+def search(instance: Dict, index_path: Path) -> Optional[Dict]:
+    """Searches for relevant documents in the index."""
+    instance_id = instance["instance_id"]
     try:
-        instance_id = instance["instance_id"]
-        searcher = LuceneSearcher(index_path.as_posix())
-        cutoff = len(instance["problem_statement"])
+        searcher = LuceneSearcher(str(index_path))
+        query_text = instance["problem_statement"]
+        cutoff = len(query_text)
         while True:
             try:
-                hits = searcher.search(
-                    instance["problem_statement"][:cutoff],
-                    k=20,
-                    remove_dups=True,
-                )
+                hits = searcher.search(query_text[:cutoff], k=20, remove_dups=True)
+                break
             except Exception as e:
-                if "maxClauseCount" in str(e):
-                    cutoff = int(round(cutoff * 0.8))
+                if "maxClauseCount" in str(e) and cutoff > 100:
+                    cutoff = int(cutoff * 0.8)
                     continue
-                else:
-                    raise e
-            break
-        results = {"instance_id": instance_id, "hits": []}
-        for hit in hits:
-            results["hits"].append({"docid": hit.docid, "score": hit.score})
-        return results
-    except Exception:
-        logger.error(f"Failed to process {instance_id}")
-        logger.error(traceback.format_exc())
+                raise
+        return {
+            "instance_id": instance_id,
+            "hits": [{"docid": hit.docid, "score": hit.score} for hit in hits],
+        }
+    except Exception as e:
+        logger.error(f"Failed to process {instance_id}: {e}")
         return None
 
 
-def search_indexes(remaining_instance, output_file, all_index_paths):
-    """
-    Searches the indexes for the given instances and writes the results to the output file.
-
-    Args:
-        remaining_instance (list): A list of instances to search for.
-        output_file (str): The path to the output file to write the results to.
-        all_index_paths (dict): A dictionary mapping instance IDs to the paths of their indexes.
-    """
-    for instance in tqdm(remaining_instance, desc="Retrieving"):
+def search_indexes(
+    instances: List[Dict], output_file: Path, index_paths: Dict[str, Path]
+):
+    """Searches indexes and writes results to output file."""
+    for instance in tqdm(instances, desc="Retrieving"):
         instance_id = instance["instance_id"]
-        if instance_id not in all_index_paths:
+        if instance_id not in index_paths:
             continue
-        index_path = all_index_paths[instance_id]
-        results = search(instance, index_path)
+        results = search(instance, index_paths[instance_id])
         if results is None:
             continue
-        with FileLock(output_file.as_posix() + ".lock"):
-            with open(output_file, "a") as out_file:
-                print(json.dumps(results), file=out_file, flush=True)
+        with FileLock(str(output_file) + ".lock"):
+            with open(output_file, "a", encoding="utf-8") as outfile:
+                json.dump(results, outfile)
+                outfile.write("\n")
 
 
-def get_missing_ids(instances, output_file):
-    with open(output_file) as f:
-        written_ids = set()
-        for line in f:
-            instance = json.loads(line)
-            instance_id = instance["instance_id"]
-            written_ids.add(instance_id)
-    missing_ids = set()
-    for instance in instances:
-        instance_id = instance["instance_id"]
-        if instance_id not in written_ids:
-            missing_ids.add(instance_id)
-    return missing_ids
+def get_missing_ids(instances: List[Dict], output_file: Path) -> Set[str]:
+    """Returns set of instance IDs that are missing from output file."""
+    written_ids = set()
+    if output_file.exists():
+        with open(output_file, encoding="utf-8") as f:
+            for line in f:
+                instance = json.loads(line)
+                written_ids.add(instance["instance_id"])
+    all_ids = {inst["instance_id"] for inst in instances}
+    return all_ids - written_ids
 
 
 def get_index_paths_worker(
-    instance,
-    root_dir_name,
-    document_encoding_func,
-    python,
-    token,
-):
-    index_path = None
+    instance: Dict,
+    root_dir_name: str,
+    document_encoding_func: Callable[[str, str], str],
+    python: str,
+    token: str,
+) -> Tuple[str, Optional[Path]]:
+    """Worker function to build index for a single instance."""
     repo = instance["repo"]
     commit = instance["base_commit"]
     instance_id = instance["instance_id"]
     try:
         repo_dir = clone_repo(repo, root_dir_name, token)
-        query = instance["problem_statement"]
         index_path = make_index(
             repo_dir=repo_dir,
             root_dir=root_dir_name,
-            query=query,
             commit=commit,
             document_encoding_func=document_encoding_func,
             python=python,
             instance_id=instance_id,
         )
-    except:
-        logger.error(f"Failed to process {repo}/{commit} (instance {instance_id})")
-        logger.error(traceback.format_exc())
-    return instance_id, index_path
+        return instance_id, index_path
+    except Exception as e:
+        logger.error(f"Failed to process {repo}/{commit} (instance {instance_id}): {e}")
+        return instance_id, None
+
+
+def process_repo_instances(args: Tuple) -> List[Tuple[str, Optional[Path]]]:
+    """Process all instances for a single repository sequentially."""
+    repo_instances, root_dir_name, document_encoding_func, python, token = args
+    return [
+        get_index_paths_worker(
+            instance, root_dir_name, document_encoding_func, python, token
+        )
+        for instance in repo_instances
+    ]
 
 
 def get_index_paths(
-    remaining_instances: list[dict[str, Any]],
+    remaining_instances: List[Dict[str, Any]],
     root_dir_name: str,
-    document_encoding_func: Any,
+    document_encoding_func: Callable[[str, str], str],
     python: str,
     token: str,
     output_file: str,
-) -> dict[str, str]:
+    num_workers: int = 4,
+) -> Dict[str, Path]:
     """
-    Retrieves the index paths for the given instances using multiple processes.
-
-    Args:
-        remaining_instances: A list of instances for which to retrieve the index paths.
-        root_dir_name: The root directory name.
-        document_encoding_func: A function for encoding documents.
-        python: The path to the Python executable.
-        token: The token to use for authentication.
-        output_file: The output file.
-        num_workers: The number of worker processes to use.
-
-    Returns:
-        A dictionary mapping instance IDs to index paths.
+    Retrieves index paths using multiple processes.
+    Instances from the same repository are processed sequentially to avoid git conflicts.
     """
-    all_index_paths = dict()
-    for instance in tqdm(remaining_instances, desc="Indexing"):
-        instance_id, index_path = get_index_paths_worker(
-            instance=instance,
-            root_dir_name=root_dir_name,
-            document_encoding_func=document_encoding_func,
-            python=python,
-            token=token,
-        )
-        if index_path is None:
-            continue
-        all_index_paths[instance_id] = index_path
+    repo_to_instances = defaultdict(list)
+    for instance in remaining_instances:
+        repo_to_instances[instance["repo"]].append(instance)
+    all_index_paths = {}
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        repo_args = [
+            (instances, root_dir_name, document_encoding_func, python, token)
+            for instances in repo_to_instances.values()
+        ]
+        future_to_repo = {
+            executor.submit(process_repo_instances, args): repo
+            for args, repo in zip(repo_args, repo_to_instances.keys())
+        }
+        total_instances = len(remaining_instances)
+        with tqdm(total=total_instances, desc="Indexing") as pbar:
+            for future in as_completed(future_to_repo):
+                repo = future_to_repo[future]
+                try:
+                    repo_results = future.result()
+                    for instance_id, index_path in repo_results:
+                        if index_path is not None:
+                            all_index_paths[instance_id] = index_path
+                        pbar.update(1)
+                except Exception as exc:
+                    logger.error(f"Repository {repo} failed: {exc}")
+                    pbar.update(len(repo_to_instances[repo]))
     return all_index_paths
 
 
-def get_root_dir(dataset_name, output_dir, document_encoding_style):
-    root_dir = Path(output_dir, dataset_name, document_encoding_style + "_indexes")
-    if not root_dir.exists():
-        root_dir.mkdir(parents=True, exist_ok=True)
-    root_dir_name = root_dir
-    return root_dir, root_dir_name
+def get_root_dir(
+    dataset_name: str, output_dir: str, document_encoding_style: str
+) -> Tuple[Path, Path]:
+    """Creates and returns root directory for indexes."""
+    root_dir = Path(output_dir) / dataset_name / f"{document_encoding_style}_indexes"
+    root_dir.mkdir(parents=True, exist_ok=True)
+    return root_dir, root_dir
+
+
+def cleanup_directories(root_dir: Path, leave_indexes: bool = True):
+    """Clean up temporary directories."""
+    del_patterns = ["repo__*"]
+    if not leave_indexes:
+        del_patterns.append("index__*")
+
+    for pattern in del_patterns:
+        for dirname in root_dir.glob(pattern):
+            shutil.rmtree(dirname, ignore_errors=True)
 
 
 def main(
-    dataset_name_or_path,
-    document_encoding_style,
-    output_dir,
-    shard_id,
-    num_shards,
-    splits,
-    leave_indexes,
+    dataset_name_or_path: str,
+    document_encoding_style: str,
+    output_dir: str,
+    shard_id: Optional[int] = None,
+    num_shards: int = 20,
+    splits: Optional[List[str]] = None,
+    leave_indexes: bool = True,
 ):
+    """Main function to run BM25 retrieval."""
+    if splits is None:
+        splits = ["train", "test"]
+
     document_encoding_func = DOCUMENT_ENCODING_FUNCTIONS[document_encoding_style]
     token = os.environ.get("GITHUB_TOKEN", "git")
     if Path(dataset_name_or_path).exists():
@@ -478,15 +397,16 @@ def main(
     if shard_id is not None:
         for split in splits:
             dataset[split] = dataset[split].shard(num_shards, shard_id)
-    instances = list()
-    if set(splits) - set(dataset.keys()) != set():
-        raise ValueError(f"Unknown splits {set(splits) - set(dataset.keys())}")
+    if not set(splits).issubset(set(dataset.keys())):
+        raise ValueError(f"Unknown splits: {set(splits) - set(dataset.keys())}")
+    instances = []
     for split in splits:
-        instances += list(dataset[split])
-    python = subprocess.run("which python", shell=True, capture_output=True)
-    python = python.stdout.decode("utf-8").strip()
-    output_file = Path(
-        output_dir, dataset_name, document_encoding_style + ".retrieval.jsonl"
+        instances.extend(list(dataset[split]))
+    python = subprocess.run(
+        "which python", shell=True, capture_output=True, text=True
+    ).stdout.strip()
+    output_file = (
+        Path(output_dir) / dataset_name / f"{document_encoding_style}.retrieval.jsonl"
     )
     remaining_instances = get_remaining_instances(instances, output_file)
     root_dir, root_dir_name = get_root_dir(
@@ -499,28 +419,18 @@ def main(
             document_encoding_func,
             python,
             token,
-            output_file,
+            str(output_file),
         )
+        logger.info(f"Finished indexing {len(all_index_paths)} instances")
+        search_indexes(remaining_instances, output_file, all_index_paths)
+        missing_ids = get_missing_ids(instances, output_file)
+        logger.warning(f"Missing indexes for {len(missing_ids)} instances.")
+        logger.info(f"Saved retrieval results to {output_file}")
     except KeyboardInterrupt:
+        logger.info("Process interrupted by user")
+    finally:
         logger.info(f"Cleaning up {root_dir}")
-        del_dirs = list(root_dir.glob("repo__*"))
-        if leave_indexes:
-            index_dirs = list(root_dir.glob("index__*"))
-            del_dirs += index_dirs
-        for dirname in del_dirs:
-            shutil.rmtree(dirname, ignore_errors=True)
-    logger.info(f"Finished indexing {len(all_index_paths)} instances")
-    search_indexes(remaining_instances, output_file, all_index_paths)
-    missing_ids = get_missing_ids(instances, output_file)
-    logger.warning(f"Missing indexes for {len(missing_ids)} instances.")
-    logger.info(f"Saved retrieval results to {output_file}")
-    del_dirs = list(root_dir.glob("repo__*"))
-    logger.info(f"Cleaning up {root_dir}")
-    if leave_indexes:
-        index_dirs = list(root_dir.glob("index__*"))
-        del_dirs += index_dirs
-    for dirname in del_dirs:
-        shutil.rmtree(dirname, ignore_errors=True)
+        cleanup_directories(root_dir, leave_indexes)
 
 
 if __name__ == "__main__":
@@ -536,7 +446,7 @@ if __name__ == "__main__":
         choices=DOCUMENT_ENCODING_FUNCTIONS.keys(),
         default="file_name_and_contents",
     )
-    parser.add_argument("--output_dir", default="./retreival_results")
+    parser.add_argument("--output_dir", default="./retrieval_results")
     parser.add_argument("--splits", nargs="+", default=["train", "test"])
     parser.add_argument("--shard_id", type=int)
     parser.add_argument("--num_shards", type=int, default=20)
