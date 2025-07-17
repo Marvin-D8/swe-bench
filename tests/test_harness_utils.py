@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 from swebench.harness.utils import run_threadpool
-from swebench.harness.test_spec.python import clean_environment_yml
+from swebench.harness.test_spec.python import clean_environment_yml, clean_requirements
 
 
 class UtilTests(unittest.TestCase):
@@ -99,3 +99,114 @@ class UtilTests(unittest.TestCase):
         )
         cleaned = clean_environment_yml(env_yaml)
         self.assertEqual(cleaned, expected_env_yaml)
+
+    def test_environment_yml_cleaner_version_specifiers(self):
+        """Test environment.yml cleaning with various version specifiers in pip section"""
+        env_yaml = (
+            "name: test-env\n"
+            "dependencies:\n"
+            "  - pip:\n"
+            "    - types-pkg_resources==1.0.0\n"
+            "    - test-package-1\n"
+            "    - types-pkg_resources>=2.0.0\n"
+            "    - test-package-2\n"
+            "    - types-pkg_resources<=3.0.0\n"
+            "    - test-package-3\n"
+            "    - types-pkg_resources>1.5.0\n"
+            "    - test-package-4\n"
+            "    - types-pkg_resources<4.0.0\n"
+            "    - test-package-5\n"
+            "    - types-pkg_resources~=2.1.0\n"
+            "    - test-package-6\n"
+            "    - types-pkg_resources!=1.9.0\n"
+            "    - test-package-7\n"
+            "    - types-pkg_resources==1.0.0.dev0\n"
+            "    - test-package-8\n"
+            "    - types-pkg_resources\n"
+            "    - test-package-9\n"
+            "    - other-package==1.0.0\n"
+        )
+        expected_env_yaml = (
+            "name: test-env\n"
+            "dependencies:\n"
+            "  - pip:\n"
+            "    - types-setuptools\n"
+            "    - test-package-1\n"
+            "    - types-setuptools\n"
+            "    - test-package-2\n"
+            "    - types-setuptools\n"
+            "    - test-package-3\n"
+            "    - types-setuptools\n"
+            "    - test-package-4\n"
+            "    - types-setuptools\n"
+            "    - test-package-5\n"
+            "    - types-setuptools\n"
+            "    - test-package-6\n"
+            "    - types-setuptools\n"
+            "    - test-package-7\n"
+            "    - types-setuptools\n"
+            "    - test-package-8\n"
+            "    - types-setuptools\n"
+            "    - test-package-9\n"
+            "    - other-package==1.0.0\n"
+        )
+        cleaned = clean_environment_yml(env_yaml)
+        self.assertEqual(cleaned, expected_env_yaml)
+
+    def test_environment_yml_cleaner_no_pip_section(self):
+        """Test environment.yml cleaning when there's no pip section"""
+        env_yaml = (
+            "name: test-env\n"
+            "dependencies:\n"
+            "  - types-pkg_resources==1.0.0\n"
+            "  - python=3.9\n"
+        )
+        cleaned = clean_environment_yml(env_yaml)
+        self.assertEqual(cleaned, env_yaml)
+
+    def test_requirements_txt_cleaner_version_specifiers(self):
+        """Test requirements.txt cleaning with various version specifiers"""
+        requirements = (
+            "types-pkg_resources==1.0.0\n"
+            "test-package-1\n"
+            "types-pkg_resources>=2.0.0\n"
+            "test-package-2\n"
+            "types-pkg_resources<=3.0.0\n"
+            "test-package-3\n"
+            "types-pkg_resources>1.5.0\n"
+            "test-package-4\n"
+            "types-pkg_resources<4.0.0\n"
+            "test-package-5\n"
+            "types-pkg_resources~=2.1.0\n"
+            "test-package-6\n"
+            "types-pkg_resources!=1.9.0\n"
+            "test-package-7\n"
+            "types-pkg_resources==1.0.0.dev0\n"
+            "test-package-8\n"
+            "types-pkg_resources\n"
+            "test-package-9\n"
+            "other-package==1.0.0\n"
+        )
+        expected_requirements = (
+            "types-setuptools\n"
+            "test-package-1\n"
+            "types-setuptools\n"
+            "test-package-2\n"
+            "types-setuptools\n"
+            "test-package-3\n"
+            "types-setuptools\n"
+            "test-package-4\n"
+            "types-setuptools\n"
+            "test-package-5\n"
+            "types-setuptools\n"
+            "test-package-6\n"
+            "types-setuptools\n"
+            "test-package-7\n"
+            "types-setuptools\n"
+            "test-package-8\n"
+            "types-setuptools\n"
+            "test-package-9\n"
+            "other-package==1.0.0\n"
+        )
+        cleaned = clean_requirements(requirements)
+        self.assertEqual(cleaned, expected_requirements)
