@@ -65,6 +65,7 @@ def main(
     open_file_limit,
     namespace,
     tag,
+    dry_run,
 ):
     """
     Build Docker images for the specified instances.
@@ -74,6 +75,7 @@ def main(
         max_workers (int): Number of workers for parallel processing.
         force_rebuild (bool): Whether to force rebuild all images.
         open_file_limit (int): Open file limit.
+        dry_run (bool): If True, create docker files and build contexts but don't build images.
     """
     # Set open file limit
     resource.setrlimit(resource.RLIMIT_NOFILE, (open_file_limit, open_file_limit))
@@ -89,6 +91,9 @@ def main(
         print("All images exist. Nothing left to build.")
         return 0
 
+    if dry_run:
+        print(f"DRY RUN MODE: Creating build contexts for {len(dataset)} images (no actual builds will be performed)")
+    
     # Build images for remaining instances
     successful, failed = build_instance_images(
         client=client,
@@ -97,9 +102,16 @@ def main(
         max_workers=max_workers,
         namespace=namespace,
         tag=tag,
+        dry_run=dry_run,
     )
-    print(f"Successfully built {len(successful)} images")
-    print(f"Failed to build {len(failed)} images")
+    if dry_run:
+        print(f"Successfully created build contexts for {len(successful)} images")
+        if len(failed) > 0:
+            print(f"Failed to create build contexts for {len(failed)} images")
+    else:
+        print(f"Successfully built {len(successful)} images")
+        if len(failed) > 0:
+            print(f"Failed to build {len(failed)} images")
 
 
 if __name__ == "__main__":
@@ -134,6 +146,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--tag", type=str, default=None, help="Tag to use for the images"
+    )
+    parser.add_argument(
+        "--dry_run", 
+        type=str2bool, 
+        default=False, 
+        help="Create docker files and build contexts but don't build images"
     )
     args = parser.parse_args()
     main(**vars(args))
