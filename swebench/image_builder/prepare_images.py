@@ -4,9 +4,9 @@ import resource
 from argparse import ArgumentParser
 
 from swebench.harness.constants import KEY_INSTANCE_ID
-from swebench.harness.docker_build import build_instance_images
-from swebench.harness.docker_utils import list_images
-from swebench.harness.test_spec.test_spec import make_test_spec
+from swebench.image_builder.docker_build import build_instance_images
+from swebench.image_builder.docker_utils import list_images
+from swebench.image_builder.image_spec import make_image_spec
 from swebench.harness.utils import load_swebench_dataset, str2bool, optional_str
 
 
@@ -47,7 +47,7 @@ def filter_dataset_to_build(
             continue
 
         # Check if the instance needs to be built (based on force_rebuild flag and existing images)
-        spec = make_test_spec(instance, namespace=namespace, instance_image_tag=tag)
+        spec = make_image_spec(instance, namespace=namespace, instance_image_tag=tag)
         if force_rebuild:
             data_to_build.append(instance)
         elif spec.instance_image_key not in existing_images:

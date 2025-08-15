@@ -1,4 +1,4 @@
-from swebench.harness.constants import MAP_REPO_TO_EXT
+from swebench.data_specs import MAP_REPO_TO_EXT
 from swebench.harness.test_spec.javascript import (
     make_eval_script_list_js,
 )

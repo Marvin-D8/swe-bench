@@ -8,20 +8,20 @@ import traceback
 
 from pathlib import Path
 
-from swebench.harness.constants import (
+from swebench.image_builder.constants import (
     BASE_IMAGE_BUILD_DIR,
-    DOCKER_USER,
+    CONTAINER_USER,
     ENV_IMAGE_BUILD_DIR,
     INSTANCE_IMAGE_BUILD_DIR,
-    UTF8,
 )
-from swebench.harness.docker_utils import cleanup_container, remove_image
-from swebench.harness.test_spec.test_spec import (
-    get_test_specs_from_dataset,
-    make_test_spec,
-    TestSpec,
+from swebench.image_builder.docker_utils import cleanup_container, remove_image
+from swebench.image_builder.image_spec import (
+    get_image_specs_from_dataset,
+    make_image_spec,
+    ImageSpec,
 )
 from swebench.harness.utils import ansi_escape, run_threadpool
+from swebench.logger import setup_logger, close_logger
 
 
 class BuildImageError(Exception):
@@ -39,38 +39,6 @@ class BuildImageError(Exception):
         )
 
 
-def setup_logger(instance_id: str, log_file: Path, mode="w", add_stdout: bool = False):
-    """
-    This logger is used for logging the build process of images and containers.
-    It writes logs to the log file.
-
-    If `add_stdout` is True, logs will also be sent to stdout, which can be used for
-    streaming ephemeral output from Modal containers.
-    """
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger(f"{instance_id}.{log_file.name}")
-    handler = logging.FileHandler(log_file, mode=mode, encoding=UTF8)
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-    setattr(logger, "log_file", log_file)
-    if add_stdout:
-        handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter(
-            f"%(asctime)s - {instance_id} - %(levelname)s - %(message)s"
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-    return logger
-
-
-def close_logger(logger):
-    # To avoid too many open files
-    for handler in logger.handlers:
-        handler.close()
-        logger.removeHandler(handler)
 
 
 def build_image(
@@ -179,9 +147,9 @@ def build_base_images(
         dry_run (bool): If True, create docker files and build contexts but don't build images
     """
     # Get the base images to build from the dataset
-    test_specs = get_test_specs_from_dataset(dataset)
+    image_specs = get_image_specs_from_dataset(dataset)
     base_images = {
-        x.base_image_key: (x.base_dockerfile, x.platform) for x in test_specs
+        x.base_image_key: (x.base_dockerfile, x.platform) for x in image_specs
     }
 
     # Build the base images
@@ -223,25 +191,25 @@ def get_env_configs_to_build(
 
     Args:
         client (docker.DockerClient): Docker client to use for building the images
-        dataset (list): List of test specs or dataset to build images for
+        dataset (list): List of image specs or dataset to build images for
         dry_run (bool): If True, skip base image dependency checks and include all environment images
     """
     image_scripts = dict()
     base_images = dict()
-    test_specs = get_test_specs_from_dataset(dataset)
+    image_specs = get_image_specs_from_dataset(dataset)
 
-    for test_spec in test_specs:
+    for image_spec in image_specs:
         # Check if the base image exists (skip in dry run mode)
         if not dry_run:
             try:
-                if test_spec.base_image_key not in base_images:
-                    base_images[test_spec.base_image_key] = client.images.get(
-                        test_spec.base_image_key
+                if image_spec.base_image_key not in base_images:
+                    base_images[image_spec.base_image_key] = client.images.get(
+                        image_spec.base_image_key
                     )
-                base_image = base_images[test_spec.base_image_key]
+                base_image = base_images[image_spec.base_image_key]
             except docker.errors.ImageNotFound:
                 raise Exception(
-                    f"Base image {test_spec.base_image_key} not found for {test_spec.env_image_key}\n."
+                    f"Base image {image_spec.base_image_key} not found for {image_spec.env_image_key}\n."
                     "Please build the base images first."
                 )
 
@@ -249,17 +217,17 @@ def get_env_configs_to_build(
         image_exists = False
         if not dry_run:
             try:
-                env_image = client.images.get(test_spec.env_image_key)
+                env_image = client.images.get(image_spec.env_image_key)
                 image_exists = True
             except docker.errors.ImageNotFound:
                 pass
         
         if not image_exists:
             # Add the environment image to the list of images to build
-            image_scripts[test_spec.env_image_key] = {
-                "setup_script": test_spec.setup_env_script,
-                "dockerfile": test_spec.env_dockerfile,
-                "platform": test_spec.platform,
+            image_scripts[image_spec.env_image_key] = {
+                "setup_script": image_spec.setup_env_script,
+                "dockerfile": image_spec.env_dockerfile,
+                "platform": image_spec.platform,
             }
     return image_scripts
 
@@ -276,14 +244,14 @@ def build_env_images(
 
     Args:
         client (docker.DockerClient): Docker client to use for building the images
-        dataset (list): List of test specs or dataset to build images for
+        dataset (list): List of image specs or dataset to build images for
         force_rebuild (bool): Whether to force rebuild the images even if they already exist
         max_workers (int): Maximum number of workers to use for building images
         dry_run (bool): If True, create docker files and build contexts but don't build images
     """
     # Get the environment images to build from the dataset
     if force_rebuild:
-        env_image_keys = {x.env_image_key for x in get_test_specs_from_dataset(dataset)}
+        env_image_keys = {x.env_image_key for x in get_image_specs_from_dataset(dataset)}
         for key in env_image_keys:
             remove_image(client, key, "quiet")
     build_base_images(client, dataset, force_rebuild, dry_run=dry_run)
@@ -332,40 +300,40 @@ def build_instance_images(
     Builds the instance images required for the dataset if they do not already exist.
 
     Args:
-        dataset (list): List of test specs or dataset to build images for
+        dataset (list): List of image specs or dataset to build images for
         client (docker.DockerClient): Docker client to use for building the images
         force_rebuild (bool): Whether to force rebuild the images even if they already exist
         max_workers (int): Maximum number of workers to use for building images
         dry_run (bool): If True, create docker files and build contexts but don't build images
     """
     # Build environment images (and base images as needed) first
-    test_specs = list(
+    image_specs = list(
         map(
-            lambda x: make_test_spec(x, namespace=namespace, instance_image_tag=tag),
+            lambda x: make_image_spec(x, namespace=namespace, instance_image_tag=tag),
             dataset,
         )
     )
     if force_rebuild:
-        for spec in test_specs:
+        for spec in image_specs:
             remove_image(client, spec.instance_image_key, "quiet")
-    _, env_failed = build_env_images(client, test_specs, force_rebuild, max_workers, dry_run=dry_run)
+    _, env_failed = build_env_images(client, image_specs, force_rebuild, max_workers, dry_run=dry_run)
 
     if len(env_failed) > 0:
         # Don't build images for instances that depend on failed-to-build env images
         dont_run_specs = [
-            spec for spec in test_specs if spec.env_image_key in env_failed
+            spec for spec in image_specs if spec.env_image_key in env_failed
         ]
-        test_specs = [
-            spec for spec in test_specs if spec.env_image_key not in env_failed
+        image_specs = [
+            spec for spec in image_specs if spec.env_image_key not in env_failed
         ]
         print(
             f"Skipping {len(dont_run_specs)} instances - due to failed env image builds"
         )
-    print(f"Building instance images for {len(test_specs)} instances")
+    print(f"Building instance images for {len(image_specs)} instances")
     successful, failed = list(), list()
 
     # `logger` is set to None b/c logger is created in build-instage_image
-    payloads = [(spec, client, None, False, dry_run) for spec in test_specs]
+    payloads = [(spec, client, None, False, dry_run) for spec in image_specs]
     # Build the instance images
     successful, failed = run_threadpool(build_instance_image, payloads, max_workers)
     # Show how many images failed to build
@@ -379,35 +347,35 @@ def build_instance_images(
 
 
 def build_instance_image(
-    test_spec: TestSpec,
+    image_spec: ImageSpec,
     client: docker.DockerClient,
     logger: logging.Logger | None,
     nocache: bool,
     dry_run: bool = False,
 ):
     """
-    Builds the instance image for the given test spec if it does not already exist.
+    Builds the instance image for the given image spec if it does not already exist.
 
     Args:
-        test_spec (TestSpec): Test spec to build the instance image for
+        image_spec (ImageSpec): Image spec to build the instance image for
         client (docker.DockerClient): Docker client to use for building the image
         logger (logging.Logger): Logger to use for logging the build process
         nocache (bool): Whether to use the cache when building
         dry_run (bool): If True, create docker files and build contexts but don't build images
     """
     # Set up logging for the build process
-    build_dir = INSTANCE_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(
+    build_dir = INSTANCE_IMAGE_BUILD_DIR / image_spec.instance_image_key.replace(
         ":", "__"
     )
     new_logger = False
     if logger is None:
         new_logger = True
-        logger = setup_logger(test_spec.instance_id, build_dir / "prepare_image.log")
+        logger = setup_logger(image_spec.instance_id, build_dir / "prepare_image.log")
 
     # Get the image names and dockerfile for the instance image
-    image_name = test_spec.instance_image_key
-    env_image_name = test_spec.env_image_key
-    dockerfile = test_spec.instance_dockerfile
+    image_name = image_spec.instance_image_key
+    env_image_name = image_spec.env_image_key
+    dockerfile = image_spec.instance_dockerfile
 
     # Check that the env. image the instance image is based on exists (skip in dry run mode)
     if not dry_run:
@@ -415,17 +383,17 @@ def build_instance_image(
             env_image = client.images.get(env_image_name)
         except docker.errors.ImageNotFound as e:
             raise BuildImageError(
-                test_spec.instance_id,
-                f"Environment image {env_image_name} not found for {test_spec.instance_id}",
+                image_spec.instance_id,
+                f"Environment image {env_image_name} not found for {image_spec.instance_id}",
                 logger,
             ) from e
         logger.info(
-            f"Environment image {env_image_name} found for {test_spec.instance_id}\n"
-            f"Building instance image {image_name} for {test_spec.instance_id}"
+            f"Environment image {env_image_name} found for {image_spec.instance_id}\n"
+            f"Building instance image {image_name} for {image_spec.instance_id}"
         )
     else:
         logger.info(
-            f"Building instance image {image_name} for {test_spec.instance_id}"
+            f"Building instance image {image_name} for {image_spec.instance_id}"
         )
 
     # Check if the instance image already exists (skip in dry run mode)
@@ -442,10 +410,10 @@ def build_instance_image(
         build_image(
             image_name=image_name,
             setup_scripts={
-                "setup_repo.sh": test_spec.install_repo_script,
+                "setup_repo.sh": image_spec.install_repo_script,
             },
             dockerfile=dockerfile,
-            platform=test_spec.platform,
+            platform=image_spec.platform,
             client=client,
             build_dir=build_dir,
             nocache=nocache,
@@ -458,66 +426,3 @@ def build_instance_image(
         close_logger(logger)
 
 
-def build_container(
-    test_spec: TestSpec,
-    client: docker.DockerClient,
-    run_id: str,
-    logger: logging.Logger,
-    nocache: bool,
-    force_rebuild: bool = False,
-):
-    """
-    Builds the instance image for the given test spec and creates a container from the image.
-
-    Args:
-        test_spec (TestSpec): Test spec to build the instance image and container for
-        client (docker.DockerClient): Docker client for building image + creating the container
-        run_id (str): Run ID identifying process, used for the container name
-        logger (logging.Logger): Logger to use for logging the build process
-        nocache (bool): Whether to use the cache when building
-        force_rebuild (bool): Whether to force rebuild the image even if it already exists
-    """
-    # Build corresponding instance image
-    if force_rebuild:
-        remove_image(client, test_spec.instance_image_key, "quiet")
-    if not test_spec.is_remote_image:
-        build_instance_image(test_spec, client, logger, nocache)
-    else:
-        try:
-            client.images.get(test_spec.instance_image_key)
-        except docker.errors.ImageNotFound:
-            try:
-                client.images.pull(test_spec.instance_image_key)
-            except docker.errors.NotFound as e:
-                raise BuildImageError(test_spec.instance_id, str(e), logger) from e
-            except Exception as e:
-                raise Exception(
-                    f"Error occurred while pulling image {test_spec.base_image_key}: {str(e)}"
-                )
-
-    container = None
-    try:
-        # Create the container
-        logger.info(f"Creating container for {test_spec.instance_id}...")
-
-        # Define arguments for running the container
-        run_args = test_spec.docker_specs.get("run_args", {})
-        cap_add = run_args.get("cap_add", [])
-
-        container = client.containers.create(
-            image=test_spec.instance_image_key,
-            name=test_spec.get_instance_container_name(run_id),
-            user=DOCKER_USER,
-            detach=True,
-            command="tail -f /dev/null",
-            platform=test_spec.platform,
-            cap_add=cap_add,
-        )
-        logger.info(f"Container for {test_spec.instance_id} created: {container.id}")
-        return container
-    except Exception as e:
-        # If an error occurs, clean up the container and raise an exception
-        logger.error(f"Error creating container for {test_spec.instance_id}: {e}")
-        logger.info(traceback.format_exc())
-        cleanup_container(client, container, logger)
-        raise BuildImageError(test_spec.instance_id, str(e), logger) from e

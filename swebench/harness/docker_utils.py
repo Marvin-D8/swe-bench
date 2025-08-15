@@ -67,7 +67,6 @@ def remove_image(client, image_id, logger=None):
     Args:
         client (docker.DockerClient): Docker client.
         image_id (str): Image ID.
-        rm_image (bool): Whether to remove the image.
         logger (logging.Logger): Logger to use for output. If None, print to stdout.
     """
     if not logger:

@@ -1,35 +1,35 @@
-from swebench.harness.dockerfiles.c import (
+from swebench.image_builder.dockerfiles.c import (
     _DOCKERFILE_BASE_C,
     _DOCKERFILE_INSTANCE_C,
 )
-from swebench.harness.dockerfiles.go import (
+from swebench.image_builder.dockerfiles.go import (
     _DOCKERFILE_BASE_GO,
     _DOCKERFILE_INSTANCE_GO,
 )
-from swebench.harness.dockerfiles.java import (
+from swebench.image_builder.dockerfiles.java import (
     _DOCKERFILE_BASE_JAVA,
     _DOCKERFILE_INSTANCE_JAVA,
 )
-from swebench.harness.dockerfiles.javascript import (
+from swebench.image_builder.dockerfiles.javascript import (
     _DOCKERFILE_BASE_JS,
     _DOCKERFILE_BASE_JS_2,
     _DOCKERFILE_ENV_JS,
     _DOCKERFILE_INSTANCE_JS,
 )
-from swebench.harness.dockerfiles.python import (
+from swebench.image_builder.dockerfiles.python import (
     _DOCKERFILE_BASE_PY,
     _DOCKERFILE_ENV_PY,
     _DOCKERFILE_INSTANCE_PY,
 )
-from swebench.harness.dockerfiles.php import (
+from swebench.image_builder.dockerfiles.php import (
     _DOCKERFILE_BASE_PHP,
     _DOCKERFILE_INSTANCE_PHP,
 )
-from swebench.harness.dockerfiles.ruby import (
+from swebench.image_builder.dockerfiles.ruby import (
     _DOCKERFILE_BASE_RUBY,
     _DOCKERFILE_INSTANCE_RUBY,
 )
-from swebench.harness.dockerfiles.rust import (
+from swebench.image_builder.dockerfiles.rust import (
     _DOCKERFILE_BASE_RUST,
     _DOCKERFILE_INSTANCE_RUST,
 )

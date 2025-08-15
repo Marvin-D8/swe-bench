@@ -1,6 +1,8 @@
 import json
+import logging
 import re
 import requests
+import sys
 import traceback
 
 from argparse import ArgumentTypeError
@@ -10,8 +12,8 @@ from dotenv import load_dotenv
 from pathlib import Path
 from tqdm import tqdm
 from typing import cast
+from swebench.constants import SWEbenchInstance
 from swebench.harness.constants import (
-    SWEbenchInstance,
     KEY_INSTANCE_ID,
     KEY_MODEL,
     KEY_PREDICTION,

@@ -80,7 +80,7 @@ def make_run_report(
         images = list_images(client)
         test_specs = list(map(make_test_spec, full_dataset))
         for spec in test_specs:
-            image_name = spec.instance_image_key
+            image_name = spec.image
             if image_name in images:
                 unremoved_images.add(image_name)
         containers = client.containers.list(all=True)

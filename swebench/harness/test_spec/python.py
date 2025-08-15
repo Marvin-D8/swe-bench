@@ -3,16 +3,18 @@ import posixpath
 import re
 import requests
 
+from swebench.constants import SWEbenchInstance 
 from swebench.harness.constants import (
-    SWEbenchInstance,
-    MAP_REPO_TO_ENV_YML_PATHS,
-    MAP_REPO_TO_INSTALL,
-    MAP_REPO_TO_REQS_PATHS,
-    MAP_REPO_VERSION_TO_SPECS,
     NON_TEST_EXTS,
     SWE_BENCH_URL_RAW,
     START_TEST_OUTPUT,
     END_TEST_OUTPUT,
+)
+from swebench.data_specs import (
+    get_data_spec,
+    MAP_REPO_TO_ENV_YML_PATHS,
+    MAP_REPO_TO_INSTALL,
+    MAP_REPO_TO_REQS_PATHS,
 )
 from swebench.harness.utils import get_modified_files
 from functools import cache
@@ -387,9 +389,7 @@ def make_eval_script_list_py(
     )
     test_command = " ".join(
         [
-            MAP_REPO_VERSION_TO_SPECS[instance["repo"]][instance["version"]][
-                "test_cmd"
-            ],
+            get_data_spec(instance["repo"], instance["version"])["test_cmd"],
             *get_test_directives(instance),
         ]
     )

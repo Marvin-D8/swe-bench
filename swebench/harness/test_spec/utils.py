@@ -1,18 +1,16 @@
 from swebench.harness.constants import (
     END_TEST_OUTPUT,
-    MAP_REPO_VERSION_TO_SPECS,
     START_TEST_OUTPUT,
 )
 from swebench.harness.utils import get_modified_files
+from swebench.data_specs import get_data_spec
 
 
 # MARK: Test Command Creation Functions
 
 
 def get_test_cmds(instance) -> list:
-    test_cmd = MAP_REPO_VERSION_TO_SPECS[instance["repo"]][instance["version"]][
-        "test_cmd"
-    ]
+    test_cmd = get_data_spec(instance["repo"], instance["version"])["test_cmd"]
     return [test_cmd] if isinstance(test_cmd, str) else test_cmd
 
 
