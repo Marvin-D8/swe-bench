@@ -268,12 +268,19 @@ def make_repo_script_list_py(
     This is the setup script for the instance image.
     """
     setup_commands = [
-        f"git clone -o origin https://github.com/{repo} {repo_directory}",
+        f"git clone -o origin --single-branch https://github.com/{repo} {repo_directory}",
         f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
         f"cd {repo_directory}",
         f"git reset --hard {base_commit}",
-        # Remove the remote so the agent won't see newer commits.
+        # Remove the remote and tags so the agent won't see newer commits.
         "git remote remove origin",
+        "git tag -d $(git tag -l)",
+        "git reflog expire --expire=now --all",
+        "git gc --prune=now --aggressive",
+        # Verify future logs aren't available
+        f"TARGET_TIMESTAMP=$(git show -s --format=%ci {base_commit})",
+        'COMMIT_COUNT=$(git log --oneline --since="$TARGET_TIMESTAMP" | wc -l)',
+        '[ "$COMMIT_COUNT" -eq 1 ] || exit 1',
         # Make sure conda is available for later use
         "source /opt/miniconda3/bin/activate",
         f"conda activate {env_name}",
