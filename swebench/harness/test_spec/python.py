@@ -13,6 +13,7 @@ from swebench.harness.constants import (
     SWE_BENCH_URL_RAW,
     START_TEST_OUTPUT,
     END_TEST_OUTPUT,
+    REPO_BASE_COMMIT_BRANCH,
 )
 from swebench.harness.utils import get_modified_files
 from functools import cache
@@ -267,8 +268,10 @@ def make_repo_script_list_py(
     Create a list of bash commands to set up the repository for testing.
     This is the setup script for the instance image.
     """
+    branch = REPO_BASE_COMMIT_BRANCH.get(repo, {}).get(base_commit, "")
+    branch = f"--branch {branch}" if branch else ""
     setup_commands = [
-        f"git clone -o origin --single-branch https://github.com/{repo} {repo_directory}",
+        f"git clone -o origin {branch} --single-branch https://github.com/{repo} {repo_directory}",
         f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
         f"cd {repo_directory}",
         f"git reset --hard {base_commit}",
