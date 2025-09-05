@@ -279,8 +279,9 @@ def make_repo_script_list_py(
         "git gc --prune=now --aggressive",
         # Verify future logs aren't available
         f"TARGET_TIMESTAMP=$(git show -s --format=%ci {base_commit})",
-        'COMMIT_COUNT=$(git log --oneline --all --since="$TARGET_TIMESTAMP" | wc -l)',
-        '[ "$COMMIT_COUNT" -eq 1 ] || exit 1',
+        "AFTER_TIMESTAMP=$(date -d \"$TARGET_TIMESTAMP + 1 second\" '+%Y-%m-%d %H:%M:%S')",
+        'COMMIT_COUNT=$(git log --oneline --all --since="$AFTER_TIMESTAMP" | wc -l)',
+        '[ "$COMMIT_COUNT" -eq 0 ] || exit 1',
         # Make sure conda is available for later use
         "source /opt/miniconda3/bin/activate",
         f"conda activate {env_name}",
