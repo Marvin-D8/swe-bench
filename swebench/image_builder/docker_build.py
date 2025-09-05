@@ -38,8 +38,6 @@ class BuildImageError(Exception):
 
 def build_image(
     image_spec: ImageSpec,
-    client: docker.DockerClient,
-    platform: str = "linux/amd64",
     nocache: bool = False,
     dry_run: bool = False,
 ):
@@ -68,7 +66,6 @@ def build_image(
         with open(dockerfile_path, "w") as f:
             f.write(image_spec.dockerfile)
 
-        # Use image_spec.platform for consistency
         target_platform = image_spec.platform
         logger.info(
             f"Building docker image {image_spec.name} in {dockerfile_path} "
@@ -76,7 +73,6 @@ def build_image(
         )
 
         if not dry_run:
-            # Build the docker buildx command
             cmd = [
                 "docker",
                 "buildx",
@@ -84,19 +80,15 @@ def build_image(
                 f"--platform={target_platform}",
                 f"--tag={image_spec.name}",
                 f"--file={dockerfile_path}",
-                "--progress=plain",  # Plain text output for better parsing
-                "--load",  # Load the image into local Docker daemon
+                "--progress=plain",
+                "--load",
             ]
 
             if nocache:
                 cmd.append("--no-cache")
-
-            # Add build context as the last argument
             cmd.append(str(dockerfile_path.parent))
 
             logger.info(f"Executing: {' '.join(cmd)}")
-
-            # Run buildx with streaming output
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -129,13 +121,12 @@ def build_image(
         else:
             logger.info("Build context created successfully!")
     except BuildImageError:
-        # Re-raise BuildImageError as-is
         raise
     except Exception as e:
         logger.error(f"Error building image {image_spec.name}: {e}")
         raise BuildImageError(image_spec.name, str(e), logger) from e
     finally:
-        close_logger(logger)  # functions that create loggers should close them
+        close_logger(logger)
 
 
 def build_instance_images(
@@ -155,22 +146,16 @@ def build_instance_images(
         max_workers (int): Maximum number of workers to use for building images
         dry_run (bool): If True, create docker files and build contexts but don't build images
     """
-    # Build environment images (and base images as needed) first
     if force_rebuild:
         for spec in image_specs:
             remove_image(client, spec.instance_image_key, "quiet")
     successful, failed = list(), list()
-    # `logger` is set to None b/c logger is created in build-instage_image
     payloads = [(spec, client, None, False, dry_run) for spec in image_specs]
-    # Build the instance images
     successful, failed = run_threadpool(build_instance_image, payloads, max_workers)
-    # Show how many images failed to build
     if len(failed) == 0:
         print("All instance images built successfully.")
     else:
         print(f"{len(failed)} instance images failed to build.")
-
-    # Return the list of (un)successfuly built images
     return successful, failed
 
 
@@ -191,7 +176,6 @@ def build_instance_image(
         nocache (bool): Whether to use the cache when building
         dry_run (bool): If True, create docker files and build contexts but don't build images
     """
-    build_dir = IMAGE_BUILDER_LOG_DIR / image_spec.filesafe_name
     new_logger = False
     if logger is None:
         new_logger = True
