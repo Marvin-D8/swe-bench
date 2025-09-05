@@ -60,14 +60,14 @@ def make_test_spec(
     """
     if isinstance(instance, TestSpec):
         return instance
-    
+
     instance_id = instance["instance_id"]
     repo = instance["repo"]
     version = instance.get("version")
     base_commit = instance["base_commit"]
     problem_statement = instance.get("problem_statement")
     test_patch = instance["test_patch"]
-    
+
     if "image" not in instance:
         raise ValueError(f"Instance {instance_id} missing required 'image' field")
     image = instance["image"]

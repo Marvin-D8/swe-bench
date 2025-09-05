@@ -9,5 +9,5 @@ CONTAINER_ENV_NAME = "testbed"
 
 # Constants - Installation Logging
 INSTALL_FAIL = ">>>>> Init Failed"
-INSTALL_PASS = ">>>>> Init Succeeded" 
+INSTALL_PASS = ">>>>> Init Succeeded"
 INSTALL_TIMEOUT = ">>>>> Init Timed Out"

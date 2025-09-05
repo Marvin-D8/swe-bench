@@ -3,7 +3,7 @@ import posixpath
 import re
 import requests
 
-from swebench.constants import SWEbenchInstance 
+from swebench.constants import SWEbenchInstance
 from swebench.harness.constants import (
     NON_TEST_EXTS,
     SWE_BENCH_URL_RAW,

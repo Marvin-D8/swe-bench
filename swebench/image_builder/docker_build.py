@@ -54,7 +54,10 @@ def build_image(
         nocache (bool): Whether to use the cache when building
         dry_run (bool): If True, create docker files and build contexts but don't build images
     """
-    logger = setup_logger(image_spec.instance_id, IMAGE_BUILDER_LOG_DIR / image_spec.filesafe_name / "build_image.log")
+    logger = setup_logger(
+        image_spec.instance_id,
+        IMAGE_BUILDER_LOG_DIR / image_spec.filesafe_name / "build_image.log",
+    )
     logger.info(
         f"Building image {image_spec.name}\n"
         f"Using dockerfile:\n{image_spec.dockerfile}\n"
@@ -64,33 +67,35 @@ def build_image(
     try:
         with open(dockerfile_path, "w") as f:
             f.write(image_spec.dockerfile)
-        
+
         # Use image_spec.platform for consistency
         target_platform = image_spec.platform
         logger.info(
             f"Building docker image {image_spec.name} in {dockerfile_path} "
             f"with platform {target_platform} using Docker Buildx"
         )
-        
+
         if not dry_run:
             # Build the docker buildx command
             cmd = [
-                "docker", "buildx", "build",
+                "docker",
+                "buildx",
+                "build",
                 f"--platform={target_platform}",
                 f"--tag={image_spec.name}",
                 f"--file={dockerfile_path}",
                 "--progress=plain",  # Plain text output for better parsing
                 "--load",  # Load the image into local Docker daemon
             ]
-            
+
             if nocache:
                 cmd.append("--no-cache")
-            
+
             # Add build context as the last argument
             cmd.append(str(dockerfile_path.parent))
-            
+
             logger.info(f"Executing: {' '.join(cmd)}")
-            
+
             # Run buildx with streaming output
             process = subprocess.Popen(
                 cmd,
@@ -98,9 +103,9 @@ def build_image(
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
             )
-            
+
             buildlog = ""
             # Stream output line by line (similar to original)
             for line in process.stdout:
@@ -110,10 +115,10 @@ def build_image(
                     clean_line = ansi_escape(line)
                     logger.info(clean_line)
                     buildlog += line + "\n"
-            
+
             # Wait for process to complete
             return_code = process.wait()
-            
+
             if return_code == 0:
                 logger.info("Image built successfully!")
             else:

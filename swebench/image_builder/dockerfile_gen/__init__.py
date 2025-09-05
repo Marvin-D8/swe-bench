@@ -18,25 +18,32 @@ SWE_BENCH_MULTIMODAL_DATASETS = {
     "princeton-nlp/SWE-bench_Multimodal",
 }
 
+
 def get_dockerfile(instance: dict, dataset_name: str) -> str:
     """
     The main dockerfile generator function.
     """
     if dataset_name in OG_SWE_BENCH_DATASETS:
         from swebench.image_builder.dockerfile_gen._swebench import _get_dockerfile
+
         return _get_dockerfile(instance)
     elif dataset_name in SWE_BENCH_MULTIMODAL_DATASETS:
         raise ValueError("Multimodal datasets are not supported yet")
         # from swebench.image_builder.dockerfile_gen._swebench_multimodal import _get_dockerfile
         # return _get_dockerfile(instance)
     elif dataset_name == "SWE-bench/SWE-bench_Multilingual":
-        from swebench.image_builder.dockerfile_gen._swebench_multilingual import _get_dockerfile
+        from swebench.image_builder.dockerfile_gen._swebench_multilingual import (
+            _get_dockerfile,
+        )
+
         return _get_dockerfile(instance)
     else:
         raise ValueError(f"Invalid dataset name: {dataset_name}")
 
 
-def main(dataset_name: str, split: str, output_dir: str, instance_ids: list[str] | None):
+def main(
+    dataset_name: str, split: str, output_dir: str, instance_ids: list[str] | None
+):
     dataset = load_swebench_dataset(dataset_name, split, instance_ids=instance_ids)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

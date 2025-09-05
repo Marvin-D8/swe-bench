@@ -31,9 +31,7 @@ def copy_to_container(container: Container, src: Path, dst: Path):
         )
     tar_path = src.with_suffix(".tar")
     with tarfile.open(tar_path, "w") as tar:
-        tar.add(
-            src, arcname=dst.name
-        )
+        tar.add(src, arcname=dst.name)
     with open(tar_path, "rb") as tar_file:
         data = tar_file.read()
     container.exec_run(f"mkdir -p {dst.parent}")
@@ -46,7 +44,7 @@ def write_to_container(container: Container, data: str, dst: Path):
     Write a string to a file in a docker container
     """
     # TODO: test this
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp_file:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp_file:
         tmp_file.write(data)
         tmp_path = Path(tmp_file.name)
     try:

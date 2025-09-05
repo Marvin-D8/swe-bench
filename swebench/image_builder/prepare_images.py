@@ -62,18 +62,20 @@ def main(
     resource.setrlimit(resource.RLIMIT_NOFILE, (open_file_limit, open_file_limit))
     client = docker.from_env()
 
-    image_specs = load_swebench_dataset_image_specs(dataset_name, split, namespace, tag, instance_ids)
-    image_specs = filter_image_specs(
-        image_specs, client, force_rebuild
+    image_specs = load_swebench_dataset_image_specs(
+        dataset_name, split, namespace, tag, instance_ids
     )
+    image_specs = filter_image_specs(image_specs, client, force_rebuild)
 
     if len(image_specs) == 0:
         print("All images exist. Nothing left to build.")
         return 0
 
     if dry_run:
-        print(f"DRY RUN MODE: Creating build contexts for {len(image_specs)} images (no actual builds will be performed)")
-    
+        print(
+            f"DRY RUN MODE: Creating build contexts for {len(image_specs)} images (no actual builds will be performed)"
+        )
+
     # Build images for remaining instances
     successful, failed = build_instance_images(
         client=client,
@@ -126,10 +128,10 @@ if __name__ == "__main__":
         "--tag", type=str, default=None, help="Tag to use for the images"
     )
     parser.add_argument(
-        "--dry_run", 
-        type=str2bool, 
-        default=False, 
-        help="Create docker files and build contexts but don't build images"
+        "--dry_run",
+        type=str2bool,
+        default=False,
+        help="Create docker files and build contexts but don't build images",
     )
     args = parser.parse_args()
     main(**vars(args))

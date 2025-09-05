@@ -49,7 +49,7 @@ TESTS_TIMEOUT = ">>>>> Tests Timed Out"
 START_TEST_OUTPUT = ">>>>> Start Test Output"
 END_TEST_OUTPUT = ">>>>> End Test Output"
 
-# Constants - Evaluation Miscellaneous  
+# Constants - Evaluation Miscellaneous
 NON_TEST_EXTS = [
     ".json",
     ".png",

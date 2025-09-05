@@ -256,9 +256,7 @@ def get_test_directives(instance: dict) -> list:
     return directives
 
 
-def make_repo_script_list(
-    specs, repo, base_commit
-) -> str:
+def make_repo_script_list(specs, repo, base_commit) -> str:
     """
     Create a heredoc-style RUN command to set up the repository for testing.
     This is the setup script for the instance image.
@@ -293,7 +291,7 @@ def make_repo_script_list(
 
     if "install" in specs:
         setup_commands.append(specs["install"])
-    
+
     # If the setup modifies the repository in any way, it can be
     # difficult to get a clean diff.  This ensures that `git diff`
     # will only reflect the changes from the user while retaining the
@@ -305,27 +303,23 @@ def make_repo_script_list(
         "git config --global user.name SWE-bench",
         "git commit --allow-empty -am SWE-bench",
     ]
-    
+
     return make_heredoc_run_command(setup_commands)
 
 
 def make_heredoc_run_command(commands: list[str]) -> str:
     """
     Create a heredoc-style RUN command from a list of shell commands.
-    
+
     Args:
-        commands: List of shell commands to execute    
+        commands: List of shell commands to execute
     Returns:
         A single heredoc-style RUN command string
     """
     if not commands:
         return ""
-    
-    heredoc_content = "\n".join([
-        "#!/bin/bash",
-        "set -euxo pipefail",
-        *commands
-    ])
+
+    heredoc_content = "\n".join(["#!/bin/bash", "set -euxo pipefail", *commands])
     delimiter = f"EOF_{blake2b(heredoc_content.encode()).hexdigest()[:12]}"
     while delimiter in heredoc_content:
         delimiter = f"EOF_{blake2b(heredoc_content.encode() + delimiter.encode()).hexdigest()[:12]}"
@@ -360,11 +354,7 @@ def make_env_script_list(instance, specs) -> str:
     elif pkgs == "environment.yml":
         reqs = get_environment_yml(instance, CONTAINER_ENV_NAME)
         path_to_reqs = "environment.yml"
-        reqs_commands += [
-            f"cat > {path_to_reqs} << 'ENV_EOF'",
-            reqs,
-            "ENV_EOF"
-        ]
+        reqs_commands += [f"cat > {path_to_reqs} << 'ENV_EOF'", reqs, "ENV_EOF"]
         if specs.get("no_use_env", None):
             reqs_commands += [
                 f"conda create -c conda-forge -n {CONTAINER_ENV_NAME} python={specs['python']} -y",
@@ -377,18 +367,18 @@ def make_env_script_list(instance, specs) -> str:
             ]
         reqs_commands += [f"rm {path_to_reqs}"]
     else:
-        reqs_commands += [f"conda create -n {CONTAINER_ENV_NAME} python={specs['python']} {pkgs} -y"]
-    
+        reqs_commands += [
+            f"conda create -n {CONTAINER_ENV_NAME} python={specs['python']} {pkgs} -y"
+        ]
+
     reqs_commands.append(f"conda activate {CONTAINER_ENV_NAME}")
     if specs.get("pip_packages", None):
         reqs_commands += [f"python -m pip install {' '.join(specs['pip_packages'])}"]
-    
+
     return make_heredoc_run_command(reqs_commands)
 
 
-def make_eval_script_list(
-    instance, specs, base_commit, test_patch
-) -> list:
+def make_eval_script_list(instance, specs, base_commit, test_patch) -> list:
     """
     Applies the test patch and runs the tests.
     """
@@ -443,12 +433,10 @@ def _get_dockerfile(instance) -> str:
     base_commit = instance["base_commit"]
     specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
     env_script = make_env_script_list(instance, specs)
-    repo_script = make_repo_script_list(
-        specs, repo, base_commit
-    )
+    repo_script = make_repo_script_list(specs, repo, base_commit)
     monolithic_dockerfile = _DOCKERFILE_BASE
     monolithic_dockerfile += f"\n{env_script}\n" if env_script else ""
-    monolithic_dockerfile += "\nRUN echo \"source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed\" > /root/.bashrc\n"
+    monolithic_dockerfile += '\nRUN echo "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed" > /root/.bashrc\n'
     monolithic_dockerfile += f"\n{repo_script}\n" if repo_script else ""
     monolithic_dockerfile += "\nWORKDIR /testbed/\n"
     return monolithic_dockerfile

@@ -27,7 +27,10 @@ def test_passed(case: str, sm: dict[str, str]) -> bool:
 
 
 def test_failed(case: str, sm: dict[str, str]) -> bool:
-    return case not in sm or sm[case] in [TestStatus.FAILED.value, TestStatus.ERROR.value]
+    return case not in sm or sm[case] in [
+        TestStatus.FAILED.value,
+        TestStatus.ERROR.value,
+    ]
 
 
 # MARK: Evaluation report functions
@@ -263,12 +266,13 @@ def get_eval_report(
         PASS_TO_PASS: test_spec.PASS_TO_PASS,
     }
 
-    eval_type = EvalType.FAIL_ONLY if test_spec.repo in FAIL_ONLY_REPOS \
+    eval_type = (
+        EvalType.FAIL_ONLY
+        if test_spec.repo in FAIL_ONLY_REPOS
         else EvalType.PASS_AND_FAIL
-
-    report = get_eval_tests_report(
-        eval_status_map, eval_ref, eval_type=eval_type
     )
+
+    report = get_eval_tests_report(eval_status_map, eval_ref, eval_type=eval_type)
     if get_resolution_status(report) == ResolvedStatus.FULL.value:
         report_map[instance_id]["resolved"] = True
 

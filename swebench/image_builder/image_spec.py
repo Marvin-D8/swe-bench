@@ -16,6 +16,7 @@ class ImageSpec:
     A dataclass that represents an image specification for building Docker images
     for a single SWE-bench instance.
     """
+
     instance_id: str
     dockerfile: str
     namespace: Optional[str]
@@ -29,7 +30,9 @@ class ImageSpec:
         if not self.dockerfile:
             raise ValueError("dockerfile cannot be empty")
         if self.arch not in ["amd64", "arm64"]:
-            raise ValueError(f"Invalid architecture: {self.arch}. Must be 'x86_64' or 'arm64'")
+            raise ValueError(
+                f"Invalid architecture: {self.arch}. Must be 'x86_64' or 'arm64'"
+            )
         if self.namespace is not None and not self.namespace:
             raise ValueError("namespace cannot be empty string if provided")
 
@@ -40,7 +43,7 @@ class ImageSpec:
             # docker hub doesn't allow dunders in image names, so we replace them with _1776_
             key = f"{self.namespace}/{key}".replace("__", "_1776_")
         return key
-    
+
     @property
     def filesafe_name(self):
         return self.name.replace(":", "__")
@@ -92,7 +95,7 @@ def make_image_spec(
     if isinstance(instance, ImageSpec):
         return instance
     assert tag is not None, "tag cannot be None"
-    
+
     instance_id = instance["instance_id"]
     dockerfile = get_dockerfile(instance, dataset_name)
 
@@ -105,10 +108,16 @@ def make_image_spec(
 
 
 def load_swebench_dataset_image_specs(
-    dataset_name="SWE-bench/SWE-bench", split="test", namespace: Optional[str] = None, tag: str = "latest", instance_ids=None
+    dataset_name="SWE-bench/SWE-bench",
+    split="test",
+    namespace: Optional[str] = None,
+    tag: str = "latest",
+    instance_ids=None,
 ) -> list[ImageSpec]:
     """
     Load a list of ImageSpec objects from a SWE-bench dataset.
     """
     dataset = load_swebench_dataset(dataset_name, split, instance_ids=instance_ids)
-    return [make_image_spec(instance, dataset_name, namespace, tag) for instance in dataset]
+    return [
+        make_image_spec(instance, dataset_name, namespace, tag) for instance in dataset
+    ]

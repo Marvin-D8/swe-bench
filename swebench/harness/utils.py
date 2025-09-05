@@ -68,7 +68,7 @@ def get_predictions_from_file(predictions_path: str, dataset_name: str, split: s
         if not isinstance(pred, dict):
             raise ValueError(f"Each prediction must be a dictionary, got {type(pred)}")
         if "instance_id" not in pred:
-            raise ValueError(f"Each prediction must contain '{"instance_id"}'")
+            raise ValueError(f"Each prediction must contain '{'instance_id'}'")
 
     return predictions
 
@@ -158,9 +158,7 @@ def load_swebench_dataset(
                 )
             )
         dataset = [
-            instance
-            for instance in dataset
-            if instance["instance_id"] in instance_ids
+            instance for instance in dataset if instance["instance_id"] in instance_ids
         ]
     return [cast(SWEbenchInstance, instance) for instance in dataset]
 

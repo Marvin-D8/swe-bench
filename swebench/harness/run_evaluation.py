@@ -99,7 +99,7 @@ def create_container(
                 )
 
         logger.info(f"Creating container for {test_spec.instance_id}...")
-        
+
         container_name = f"sweb.eval.{test_spec.instance_id.lower()}.{run_id}"
         container = client.containers.create(
             image=test_spec.image,
@@ -190,16 +190,16 @@ def run_instance(
                 user=CONTAINER_USER,
             )
             if val.exit_code == 0:
-                logger.info(f"{APPLY_PATCH_PASS}:\n{val.output.decode("utf-8")}")
+                logger.info(f"{APPLY_PATCH_PASS}:\n{val.output.decode('utf-8')}")
                 applied_patch = True
                 break
             else:
                 logger.info(f"Failed to apply patch to container: {git_apply_cmd}")
         if not applied_patch:
-            logger.info(f"{APPLY_PATCH_FAIL}:\n{val.output.decode("utf-8")}")
+            logger.info(f"{APPLY_PATCH_FAIL}:\n{val.output.decode('utf-8')}")
             raise EvaluationError(
                 instance_id,
-                f"{APPLY_PATCH_FAIL}:\n{val.output.decode("utf-8")}",
+                f"{APPLY_PATCH_FAIL}:\n{val.output.decode('utf-8')}",
                 logger,
             )
 
@@ -463,7 +463,6 @@ def main(
         report_dir = Path(report_dir)
         if not report_dir.exists():
             report_dir.mkdir(parents=True)
-
 
     # load predictions as map of instance_id to prediction
     predictions = get_predictions_from_file(predictions_path, dataset_name, split)
