@@ -1,7 +1,8 @@
 from swebench.image_builder.dockerfile_gen._swebench_multilingual.c import (
     _DOCKERFILE_BASE_C,
     MAP_REPO_VERSION_TO_SPECS_C,
-)   from swebench.image_builder.dockerfile_gen._swebench_multilingual.go import (
+)
+from swebench.image_builder.dockerfile_gen._swebench_multilingual.go import (
     _DOCKERFILE_BASE_GO,
     MAP_REPO_VERSION_TO_SPECS_GO,
 )
@@ -15,8 +16,6 @@ from swebench.image_builder.dockerfile_gen._swebench_multilingual.go import (
 )
 from swebench.image_builder.dockerfile_gen._swebench_multilingual.java import (
     _DOCKERFILE_BASE_JAVA,
-    MAP_REPO_VERSION_TO_SPECS_JAVA,
-)
     MAP_REPO_VERSION_TO_SPECS_JAVA,
 )
 from swebench.image_builder.dockerfile_gen._swebench_multilingual.javascript import (
@@ -67,9 +66,8 @@ def get_dockerfile_base(instance, docker_specs):
     else:
         raise ValueError(f"Invalid repository for multilingual: {instance['repo']}")
 
-def make_repo_script_list(
-    specs, repo, base_commit
-) -> list:
+
+def make_repo_script_list(specs, repo, base_commit) -> list:
     """
     Create a list of bash commands to set up the repository for testing.
     This is the setup script for the instance image.
@@ -84,8 +82,8 @@ def make_repo_script_list(
         "git reflog expire --expire=now --all",
         "git gc --prune=now --aggressive",
         f"TARGET_TIMESTAMP=$(git show -s --format=%ci {base_commit})",
-        "COMMIT_COUNT=$(git log --oneline --since=\"$TARGET_TIMESTAMP\" | wc -l)",
-        "[ \"$COMMIT_COUNT\" -eq 1 ] || exit 1",
+        'COMMIT_COUNT=$(git log --oneline --since="$TARGET_TIMESTAMP" | wc -l)',
+        '[ "$COMMIT_COUNT" -eq 1 ] || exit 1',
     ]
     if "pre_install" in specs:
         setup_commands.extend(specs["pre_install"])
@@ -117,12 +115,10 @@ def _get_dockerfile(instance) -> str:
     specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
     docker_specs = specs.get("docker_specs", {})
     env_script = make_env_script_list(specs)
-    repo_script = make_repo_script_list(
-        specs, repo, base_commit
-    )
+    repo_script = make_repo_script_list(specs, repo, base_commit)
     monolithic_dockerfile = get_dockerfile_base(instance, docker_specs)
     monolithic_dockerfile += f"\n{env_script}\n" if env_script else ""
-    monolithic_dockerfile += "\nRUN echo \"source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed\" > /root/.bashrc\n"
+    monolithic_dockerfile += '\nRUN echo "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed" > /root/.bashrc\n'
     monolithic_dockerfile += f"\n{repo_script}\n" if repo_script else ""
     monolithic_dockerfile += "\nWORKDIR /testbed/\n"
     return monolithic_dockerfile
