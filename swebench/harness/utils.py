@@ -13,11 +13,6 @@ from pathlib import Path
 from tqdm import tqdm
 from typing import cast
 from swebench.constants import SWEbenchInstance
-from swebench.harness.constants import (
-    KEY_INSTANCE_ID,
-    KEY_MODEL,
-    KEY_PREDICTION,
-)
 from unidiff import PatchSet
 
 load_dotenv()
@@ -45,9 +40,9 @@ def get_predictions_from_file(predictions_path: str, dataset_name: str, split: s
         dataset = load_swebench_dataset(dataset_name, split)
         return [
             {
-                KEY_INSTANCE_ID: datum[KEY_INSTANCE_ID],
-                KEY_PREDICTION: datum["patch"],
-                KEY_MODEL: "gold",
+                "instance_id": datum["instance_id"],
+                "model_patch": datum["patch"],
+                "model_name_or_path": "gold",
             }
             for datum in dataset
         ]
@@ -72,8 +67,8 @@ def get_predictions_from_file(predictions_path: str, dataset_name: str, split: s
     for pred in predictions:
         if not isinstance(pred, dict):
             raise ValueError(f"Each prediction must be a dictionary, got {type(pred)}")
-        if KEY_INSTANCE_ID not in pred:
-            raise ValueError(f"Each prediction must contain '{KEY_INSTANCE_ID}'")
+        if "instance_id" not in pred:
+            raise ValueError(f"Each prediction must contain '{"instance_id"}'")
 
     return predictions
 
@@ -153,7 +148,7 @@ def load_swebench_dataset(
             dataset = cast(Dataset, load_from_disk(Path(name) / split))
         else:
             dataset = cast(Dataset, load_dataset(name, split=split))
-    dataset_ids = {instance[KEY_INSTANCE_ID] for instance in dataset}
+    dataset_ids = {instance["instance_id"] for instance in dataset}
     if instance_ids:
         if instance_ids - dataset_ids:
             raise ValueError(
@@ -165,7 +160,7 @@ def load_swebench_dataset(
         dataset = [
             instance
             for instance in dataset
-            if instance[KEY_INSTANCE_ID] in instance_ids
+            if instance["instance_id"] in instance_ids
         ]
     return [cast(SWEbenchInstance, instance) for instance in dataset]
 
@@ -338,6 +333,6 @@ def get_modified_files(patch: str) -> list[str]:
 
 def ansi_escape(text: str) -> str:
     """
-    Remove ANSI escape sequences from text
+    Remove ANSI codes from text
     """
     return re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])").sub("", text)

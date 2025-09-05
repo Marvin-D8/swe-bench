@@ -8,7 +8,9 @@ from swebench.image_builder.dockerfile_gen._swebench.constants import (
     _DOCKERFILE_BASE,
     HEADERS,
     REPLACE_REQ_PACKAGES,
+    REPO_BASE_COMMIT_BRANCH,
 )
+from swebench.image_builder.constants import CONTAINER_ENV_NAME, CONTAINER_WORKDIR
 from swebench.harness.constants import (
     NON_TEST_EXTS,
     START_TEST_OUTPUT,
@@ -23,7 +25,7 @@ from hashlib import blake2b
 
 
 @cache
-def get_environment_yml_by_commit(repo: str, commit: str, env_name: str) -> str:
+def get_environment_yml_by_commit(repo: str, commit: str) -> str:
     for req_path in MAP_REPO_TO_ENV_YML_PATHS[repo]:
         reqs_url = posixpath.join(SWE_BENCH_URL_RAW, repo, commit, req_path)
         reqs = requests.get(reqs_url, headers=HEADERS)
@@ -39,7 +41,7 @@ def get_environment_yml_by_commit(repo: str, commit: str, env_name: str) -> str:
     for line in lines:
         # Rename environment to given name
         if line.startswith("name:"):
-            cleaned.append(f"name: {env_name}")
+            cleaned.append(f"name: {CONTAINER_ENV_NAME}")
             continue
         cleaned.append(line)
 
@@ -107,13 +109,12 @@ def clean_environment_yml(yml_text: str) -> str:
     return prefix + pip_portion + suffix
 
 
-def get_environment_yml(instance: dict, env_name: str) -> str:
+def get_environment_yml(instance: dict) -> str:
     """
     Get environment.yml for given task instance
 
     Args:
         instance (dict): SWE Bench Task instance
-        env_name (str): Rename retrieved environment.yml to this name
     Returns:
         environment.yml (str): Returns environment.yml as string
     """
@@ -123,7 +124,7 @@ def get_environment_yml(instance: dict, env_name: str) -> str:
         if "environment_setup_commit" in instance
         else instance["base_commit"]
     )
-    yml_text = get_environment_yml_by_commit(instance["repo"], commit, env_name)
+    yml_text = get_environment_yml_by_commit(instance["repo"], commit)
     yml_text = clean_environment_yml(yml_text)
     return yml_text
 
@@ -256,29 +257,32 @@ def get_test_directives(instance: dict) -> list:
 
 
 def make_repo_script_list(
-    specs, repo, repo_directory, base_commit, env_name
+    specs, repo, base_commit
 ) -> str:
     """
     Create a heredoc-style RUN command to set up the repository for testing.
     This is the setup script for the instance image.
     """
+    branch = REPO_BASE_COMMIT_BRANCH.get(repo, {}).get(base_commit, "")
+    branch = f"--branch {branch}" if branch else ""
     setup_commands = [
         "# Clone and setup repository",
-        f"git clone -o origin --single-branch https://github.com/{repo} {repo_directory}",
-        f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
-        f"cd {repo_directory}",
+        f"git clone -o origin {branch} --single-branch https://github.com/{repo} {CONTAINER_WORKDIR}",
+        f"chmod -R 777 {CONTAINER_WORKDIR}",  # So nonroot user can run tests
+        f"cd {CONTAINER_WORKDIR}",
         f"git reset --hard {base_commit}",
         "git remote remove origin",
         "git tag -d $(git tag -l)",
         "git reflog expire --expire=now --all",
         "git gc --prune=now --aggressive",
         f"TARGET_TIMESTAMP=$(git show -s --format=%ci {base_commit})",
-        "COMMIT_COUNT=$(git log --oneline --since=\"$TARGET_TIMESTAMP\" | wc -l)",
-        "[ \"$COMMIT_COUNT\" -eq 1 ] || exit 1",
+        "AFTER_TIMESTAMP=$(date -d \"$TARGET_TIMESTAMP + 1 second\" '+%Y-%m-%d %H:%M:%S')",
+        'COMMIT_COUNT=$(git log --oneline --all --since="$AFTER_TIMESTAMP" | wc -l)',
+        '[ "$COMMIT_COUNT" -eq 0 ] || exit 1',
         "",
         "# Setup conda environment and install",
         "source /opt/miniconda3/bin/activate",
-        f"conda activate {env_name}",
+        f"conda activate {CONTAINER_ENV_NAME}",
         'echo "Current environment: $CONDA_DEFAULT_ENV"',
     ]
     if repo in MAP_REPO_TO_INSTALL:
@@ -328,7 +332,7 @@ def make_heredoc_run_command(commands: list[str]) -> str:
     return f"RUN <<{delimiter}\n{heredoc_content}\n{delimiter}\n"
 
 
-def make_env_script_list(instance, specs, env_name) -> str:
+def make_env_script_list(instance, specs) -> str:
     """
     Creates a heredoc-style RUN command to set up the conda environment for testing.
     This is the setup script for the environment image.
@@ -341,8 +345,8 @@ def make_env_script_list(instance, specs, env_name) -> str:
         reqs = get_requirements(instance)
         path_to_reqs = "/root/requirements.txt"
         reqs_commands += [
-            f"conda create -n {env_name} python={specs['python']} -y",
-            f"conda activate {env_name}",
+            f"conda create -n {CONTAINER_ENV_NAME} python={specs['python']} -y",
+            f"conda activate {CONTAINER_ENV_NAME}",
             "",
             "# Create requirements file",
             f"cat > {path_to_reqs} << 'REQUIREMENTS_EOF'",
@@ -354,7 +358,7 @@ def make_env_script_list(instance, specs, env_name) -> str:
             f"rm {path_to_reqs}",
         ]
     elif pkgs == "environment.yml":
-        reqs = get_environment_yml(instance, env_name)
+        reqs = get_environment_yml(instance, CONTAINER_ENV_NAME)
         path_to_reqs = "environment.yml"
         reqs_commands += [
             f"cat > {path_to_reqs} << 'ENV_EOF'",
@@ -363,19 +367,19 @@ def make_env_script_list(instance, specs, env_name) -> str:
         ]
         if specs.get("no_use_env", None):
             reqs_commands += [
-                f"conda create -c conda-forge -n {env_name} python={specs['python']} -y",
+                f"conda create -c conda-forge -n {CONTAINER_ENV_NAME} python={specs['python']} -y",
                 f"conda env update -f {path_to_reqs}",
             ]
         else:
             reqs_commands += [
                 f"conda env create --file {path_to_reqs}",
-                f"conda activate {env_name} && conda install python={specs['python']} -y",
+                f"conda activate {CONTAINER_ENV_NAME} && conda install python={specs['python']} -y",
             ]
         reqs_commands += [f"rm {path_to_reqs}"]
     else:
-        reqs_commands += [f"conda create -n {env_name} python={specs['python']} {pkgs} -y"]
+        reqs_commands += [f"conda create -n {CONTAINER_ENV_NAME} python={specs['python']} {pkgs} -y"]
     
-    reqs_commands.append(f"conda activate {env_name}")
+    reqs_commands.append(f"conda activate {CONTAINER_ENV_NAME}")
     if specs.get("pip_packages", None):
         reqs_commands += [f"python -m pip install {' '.join(specs['pip_packages'])}"]
     
@@ -383,7 +387,7 @@ def make_env_script_list(instance, specs, env_name) -> str:
 
 
 def make_eval_script_list(
-    instance, specs, env_name, repo_directory, base_commit, test_patch
+    instance, specs, base_commit, test_patch
 ) -> list:
     """
     Applies the test patch and runs the tests.
@@ -405,20 +409,20 @@ def make_eval_script_list(
     )
     eval_commands = [
         "source /opt/miniconda3/bin/activate",
-        f"conda activate {env_name}",
-        f"cd {repo_directory}",
+        f"conda activate {CONTAINER_ENV_NAME}",
+        f"cd {CONTAINER_WORKDIR}",
     ]
     if "eval_commands" in specs:
         eval_commands += specs["eval_commands"]
     eval_commands += [
-        f"git config --global --add safe.directory {repo_directory}",  # for nonroot user
-        f"cd {repo_directory}",
+        f"git config --global --add safe.directory {CONTAINER_WORKDIR}",  # for nonroot user
+        f"cd {CONTAINER_WORKDIR}",
         # This is just informational, so we have a record
         "git status",
         "git show",
         f"git -c core.fileMode=false diff {base_commit}",
         "source /opt/miniconda3/bin/activate",
-        f"conda activate {env_name}",
+        f"conda activate {CONTAINER_ENV_NAME}",
     ]
     if "install" in specs:
         eval_commands.append(specs["install"])
@@ -434,17 +438,13 @@ def make_eval_script_list(
 
 
 def _get_dockerfile(instance) -> str:
-    instance_id = instance["instance_id"]
     repo = instance["repo"]
     version = instance.get("version")
     base_commit = instance["base_commit"]
-    env_name = "testbed"
-    repo_directory = f"/{env_name}"
     specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
-    docker_specs = specs.get("docker_specs", {})
-    env_script = make_env_script_list(instance, specs, env_name)
+    env_script = make_env_script_list(instance, specs)
     repo_script = make_repo_script_list(
-        specs, repo, repo_directory, base_commit, env_name
+        specs, repo, base_commit
     )
     monolithic_dockerfile = _DOCKERFILE_BASE
     monolithic_dockerfile += f"\n{env_script}\n" if env_script else ""

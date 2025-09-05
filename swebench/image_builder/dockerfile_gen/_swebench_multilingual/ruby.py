@@ -1,5 +1,5 @@
 _DOCKERFILE_BASE_RUBY = r"""
-FROM --platform=linux/x86_64 ruby:{ruby_version}
+FROM --platform=linux/amd64 ruby:{ruby_version}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC

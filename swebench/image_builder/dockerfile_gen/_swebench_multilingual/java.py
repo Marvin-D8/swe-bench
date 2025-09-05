@@ -1,5 +1,5 @@
 _DOCKERFILE_BASE_JAVA = r"""
-FROM --platform=linux/x86_64 maven:3.9-eclipse-temurin-{java_version}
+FROM --platform=linux/amd64 maven:3.9-eclipse-temurin-{java_version}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC

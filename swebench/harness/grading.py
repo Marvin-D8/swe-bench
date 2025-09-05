@@ -6,8 +6,6 @@ from swebench.harness.constants import (
     FAIL_ONLY_REPOS,
     FAIL_TO_FAIL,
     FAIL_TO_PASS,
-    KEY_INSTANCE_ID,
-    KEY_PREDICTION,
     PASS_TO_FAIL,
     PASS_TO_PASS,
     RESET_FAILED,
@@ -238,7 +236,7 @@ def get_eval_report(
     """
     report_map = {}
 
-    instance_id = prediction[KEY_INSTANCE_ID]
+    instance_id = prediction["instance_id"]
     report_map[instance_id] = {
         "patch_is_None": False,
         "patch_exists": False,
@@ -247,7 +245,7 @@ def get_eval_report(
     }
 
     # Check if the model patch exists
-    if prediction[KEY_PREDICTION] is None:
+    if prediction["model_patch"] is None:
         report_map[instance_id]["patch_is_None"] = True
         return report_map
     report_map[instance_id]["patch_exists"] = True
@@ -260,7 +258,7 @@ def get_eval_report(
     report_map[instance_id]["patch_successfully_applied"] = True
 
     eval_ref = {
-        KEY_INSTANCE_ID: test_spec.instance_id,
+        "instance_id": test_spec.instance_id,
         FAIL_TO_PASS: test_spec.FAIL_TO_PASS,
         PASS_TO_PASS: test_spec.PASS_TO_PASS,
     }

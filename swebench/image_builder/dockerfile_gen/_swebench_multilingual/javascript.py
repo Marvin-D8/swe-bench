@@ -1,7 +1,7 @@
 # We use a modern version of ubuntu as the base image because old node images
 # can cause problems with agent installations. For eg. old GLIBC versions.
 _DOCKERFILE_BASE_JS_2 = r"""
-FROM --platform=linux/x86_64 ubuntu:jammy
+FROM --platform=linux/amd64 ubuntu:jammy
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC

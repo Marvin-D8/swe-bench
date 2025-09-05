@@ -4,9 +4,6 @@ from pathlib import Path
 from typing import Optional
 
 from swebench.harness.constants import (
-    KEY_INSTANCE_ID,
-    KEY_MODEL,
-    KEY_PREDICTION,
     RUN_EVALUATION_LOG_DIR,
     LOG_REPORT,
 )
@@ -46,20 +43,20 @@ def make_run_report(
 
     # iterate through dataset and check if the instance has been run
     for instance in full_dataset:
-        instance_id = instance[KEY_INSTANCE_ID]
+        instance_id = instance["instance_id"]
         if instance_id not in predictions:
             # skip instances without predictions
             incomplete_ids.add(instance_id)
             continue
         prediction = predictions[instance_id]
-        if prediction.get(KEY_PREDICTION, None) in ["", None]:
+        if prediction.get("model_patch", None) in ["", None]:
             empty_patch_ids.add(instance_id)
             continue
         report_file = (
             RUN_EVALUATION_LOG_DIR
             / run_id
-            / prediction[KEY_MODEL].replace("/", "__")
-            / prediction[KEY_INSTANCE_ID]
+            / prediction["model_name_or_path"].replace("/", "__")
+            / prediction["instance_id"]
             / LOG_REPORT
         )
         if report_file.exists():
@@ -89,7 +86,7 @@ def make_run_report(
                 unstopped_containers.add(container.name)
 
     # print final report
-    dataset_ids = {i[KEY_INSTANCE_ID] for i in full_dataset}
+    dataset_ids = {i["instance_id"] for i in full_dataset}
     print(f"Total instances: {len(full_dataset)}")
     print(f"Instances submitted: {len(set(predictions.keys()) & dataset_ids)}")
     print(f"Instances completed: {len(completed_ids)}")
@@ -129,7 +126,7 @@ def make_run_report(
             }
         )
     report_file = Path(
-        list(predictions.values())[0][KEY_MODEL].replace("/", "__")
+        list(predictions.values())[0]["model_name_or_path"].replace("/", "__")
         + f".{run_id}"
         + ".json"
     )

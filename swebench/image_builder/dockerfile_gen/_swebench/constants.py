@@ -1,5 +1,5 @@
 _DOCKERFILE_BASE = r"""
-FROM --platform=linux/x86_64 ubuntu:jammy
+FROM --platform=linux/amd64 ubuntu:jammy
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
@@ -987,7 +987,6 @@ MAP_REPO_TO_ENV_YML_PATHS = {
 }
 
 
-
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36"
 }
@@ -998,3 +997,13 @@ REPLACE_REQ_PACKAGES = [
 ]
 
 SWE_BENCH_URL_RAW = "https://raw.githubusercontent.com/"
+
+REPO_BASE_COMMIT_BRANCH = {
+    "sympy/sympy": {
+        "cffd4e0f86fefd4802349a9f9b19ed70934ea354": "1.7",
+        "70381f282f2d9d039da860e391fe51649df2779d": "sympy-1.5.1",
+    },
+    "pytest-dev/pytest": {
+        "8aba863a634f40560e25055d179220f0eefabe9a": "4.6.x",
+    },
+}

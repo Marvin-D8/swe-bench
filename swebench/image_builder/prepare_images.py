@@ -2,28 +2,24 @@ import docker
 import resource
 
 from argparse import ArgumentParser
+from pathlib import Path
 
-from swebench.harness.constants import KEY_INSTANCE_ID
+from swebench.image_builder.image_spec import load_swebench_dataset_image_specs
 from swebench.image_builder.docker_build import build_instance_images
 from swebench.image_builder.docker_utils import list_images
-from swebench.image_builder.image_spec import make_image_spec
-from swebench.harness.utils import load_swebench_dataset, str2bool, optional_str
+from swebench.harness.utils import str2bool, optional_str
 
 
-def filter_dataset_to_build(
-    dataset: list,
-    instance_ids: list | None,
+def filter_image_specs(
+    image_specs: list,
     client: docker.DockerClient,
     force_rebuild: bool,
-    namespace: str = None,
-    tag: str = None,
 ):
     """
     Filter the dataset to only include instances that need to be built.
 
     Args:
-        dataset (list): List of instances (usually all of SWE-bench dev/test split)
-        instance_ids (list): List of instance IDs to build.
+        dataset (list): List of instances (usually all of SWE-bench dev/test split) with image specs
         client (docker.DockerClient): Docker client.
         force_rebuild (bool): Whether to force rebuild all images.
     """
@@ -31,27 +27,12 @@ def filter_dataset_to_build(
     existing_images = list_images(client)
     data_to_build = []
 
-    if instance_ids is None:
-        instance_ids = [instance[KEY_INSTANCE_ID] for instance in dataset]
-
-    # Check if all instance IDs are in the dataset
-    not_in_dataset = set(instance_ids).difference(
-        set([instance[KEY_INSTANCE_ID] for instance in dataset])
-    )
-    if not_in_dataset:
-        raise ValueError(f"Instance IDs not found in dataset: {not_in_dataset}")
-
-    for instance in dataset:
-        if instance[KEY_INSTANCE_ID] not in instance_ids:
-            # Skip instances not in the list
-            continue
-
+    for spec in image_specs:
         # Check if the instance needs to be built (based on force_rebuild flag and existing images)
-        spec = make_image_spec(instance, namespace=namespace, instance_image_tag=tag)
         if force_rebuild:
-            data_to_build.append(instance)
-        elif spec.instance_image_key not in existing_images:
-            data_to_build.append(instance)
+            data_to_build.append(spec)
+        elif spec.name not in existing_images:
+            data_to_build.append(spec)
 
     return data_to_build
 
@@ -81,27 +62,24 @@ def main(
     resource.setrlimit(resource.RLIMIT_NOFILE, (open_file_limit, open_file_limit))
     client = docker.from_env()
 
-    # Filter out instances that were not specified
-    dataset = load_swebench_dataset(dataset_name, split)
-    dataset = filter_dataset_to_build(
-        dataset, instance_ids, client, force_rebuild, namespace, tag
+    image_specs = load_swebench_dataset_image_specs(dataset_name, split, namespace, tag, instance_ids)
+    image_specs = filter_image_specs(
+        image_specs, client, force_rebuild
     )
 
-    if len(dataset) == 0:
+    if len(image_specs) == 0:
         print("All images exist. Nothing left to build.")
         return 0
 
     if dry_run:
-        print(f"DRY RUN MODE: Creating build contexts for {len(dataset)} images (no actual builds will be performed)")
+        print(f"DRY RUN MODE: Creating build contexts for {len(image_specs)} images (no actual builds will be performed)")
     
     # Build images for remaining instances
     successful, failed = build_instance_images(
         client=client,
-        dataset=dataset,
+        image_specs=image_specs,
         force_rebuild=force_rebuild,
         max_workers=max_workers,
-        namespace=namespace,
-        tag=tag,
         dry_run=dry_run,
     )
     if dry_run:
@@ -119,7 +97,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset_name",
         type=str,
-        default="SWE-bench/SWE-bench_Lite",
+        default="SWE-bench/SWE-bench_Verified",
         help="Name of the dataset to use",
     )
     parser.add_argument("--split", type=str, default="test", help="Split to use")

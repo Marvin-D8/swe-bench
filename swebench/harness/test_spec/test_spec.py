@@ -5,7 +5,6 @@ from typing import Any, Union, cast
 from swebench.constants import (
     SWEbenchInstance,
 )
-from swebench.harness.constants import KEY_INSTANCE_ID
 from swebench.harness.test_spec.create_scripts import (
     make_eval_script_list,
 )
@@ -62,7 +61,7 @@ def make_test_spec(
     if isinstance(instance, TestSpec):
         return instance
     
-    instance_id = instance[KEY_INSTANCE_ID]
+    instance_id = instance["instance_id"]
     repo = instance["repo"]
     version = instance.get("version")
     base_commit = instance["base_commit"]

@@ -1,5 +1,5 @@
 _DOCKERFILE_BASE_PHP = r"""
-FROM --platform=linux/x86_64 php:{php_version}
+FROM --platform=linux/amd64 php:{php_version}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC

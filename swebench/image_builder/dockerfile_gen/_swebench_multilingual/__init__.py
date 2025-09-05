@@ -36,6 +36,8 @@ from swebench.image_builder.dockerfile_gen._swebench_multilingual.rust import (
     MAP_REPO_VERSION_TO_SPECS_RUST,
 )
 
+from swebench.image_builder.constants import CONTAINER_WORKDIR
+
 MAP_REPO_VERSION_TO_SPECS = {
     **MAP_REPO_VERSION_TO_SPECS_C,
     **MAP_REPO_VERSION_TO_SPECS_GO,
@@ -66,16 +68,16 @@ def get_dockerfile_base(instance, docker_specs):
         raise ValueError(f"Invalid repository for multilingual: {instance['repo']}")
 
 def make_repo_script_list(
-    specs, repo, repo_directory, base_commit, env_name
+    specs, repo, base_commit
 ) -> list:
     """
     Create a list of bash commands to set up the repository for testing.
     This is the setup script for the instance image.
     """
     setup_commands = [
-        f"git clone -o origin --single-branch https://github.com/{repo} {repo_directory}",
-        f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
-        f"cd {repo_directory}",
+        f"git clone -o origin --single-branch https://github.com/{repo} {CONTAINER_WORKDIR}",
+        f"chmod -R 777 {CONTAINER_WORKDIR}",  # So nonroot user can run tests
+        f"cd {CONTAINER_WORKDIR}",
         f"git reset --hard {base_commit}",
         "git remote remove origin",
         "git tag -d $(git tag -l)",
@@ -94,7 +96,7 @@ def make_repo_script_list(
     return setup_commands
 
 
-def make_env_script_list(instance, specs, env_name) -> list:
+def make_env_script_list(specs) -> list:
     """
     Creates the list of commands to set up the environment for testing.
     This is the setup script for the environment image.
@@ -109,17 +111,14 @@ def make_env_script_list(instance, specs, env_name) -> list:
 
 
 def _get_dockerfile(instance) -> str:
-    instance_id = instance["instance_id"]
     repo = instance["repo"]
     version = instance.get("version")
     base_commit = instance["base_commit"]
-    env_name = "testbed"
-    repo_directory = f"/{env_name}"
     specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
     docker_specs = specs.get("docker_specs", {})
-    env_script = make_env_script_list(instance, specs, env_name)
+    env_script = make_env_script_list(specs)
     repo_script = make_repo_script_list(
-        specs, repo, repo_directory, base_commit, env_name
+        specs, repo, base_commit
     )
     monolithic_dockerfile = get_dockerfile_base(instance, docker_specs)
     monolithic_dockerfile += f"\n{env_script}\n" if env_script else ""

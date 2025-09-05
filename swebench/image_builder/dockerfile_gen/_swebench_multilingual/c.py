@@ -1,5 +1,5 @@
 _DOCKERFILE_BASE_C = r"""
-FROM --platform=linux/x86_64 ubuntu:22.04
+FROM --platform=linux/amd64 ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC

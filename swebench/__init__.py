@@ -9,16 +9,8 @@ from swebench.constants import (
 )
 
 from swebench.image_builder import (
-    build_base_images,
-    build_env_images,
     build_instance_images,
     build_instance_image,
-)
-
-from swebench.harness.constants import (
-    KEY_INSTANCE_ID,
-    KEY_MODEL,
-    KEY_PREDICTION,
 )
 
 from swebench.harness.docker_utils import (

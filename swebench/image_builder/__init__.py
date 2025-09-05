@@ -8,10 +8,8 @@ required for evaluation.
 
 from swebench.image_builder.image_spec import ImageSpec, make_image_spec, get_image_specs_from_dataset
 from swebench.image_builder.docker_build import (
-    build_base_images,
-    build_env_images, 
-    build_instance_images,
     build_instance_image,
+    build_instance_images,
     BuildImageError,
 )
 from swebench.image_builder.docker_utils import (

@@ -8,6 +8,7 @@ import tarfile
 import threading
 import time
 import traceback
+import tempfile
 from pathlib import Path
 
 from docker.models.containers import Container
@@ -24,30 +25,19 @@ def copy_to_container(container: Container, src: Path, dst: Path):
         src (Path): Source file path
         dst (Path): Destination file path in the container
     """
-    # Check if destination path is valid
     if os.path.dirname(dst) == "":
         raise ValueError(
             f"Destination path parent directory cannot be empty!, dst: {dst}"
         )
-
-    # temporary tar file
     tar_path = src.with_suffix(".tar")
     with tarfile.open(tar_path, "w") as tar:
         tar.add(
             src, arcname=dst.name
-        )  # use destination name, so after `put_archive`, name is correct
-
-    # get bytes for put_archive cmd
+        )
     with open(tar_path, "rb") as tar_file:
         data = tar_file.read()
-
-    # Make directory if necessary
     container.exec_run(f"mkdir -p {dst.parent}")
-
-    # Send tar file to container and extract
     container.put_archive(os.path.dirname(dst), data)
-
-    # clean up in locally and in container
     tar_path.unlink()
 
 
@@ -55,20 +45,17 @@ def write_to_container(container: Container, data: str, dst: Path):
     """
     Write a string to a file in a docker container
     """
-    # echo with heredoc to file
-    command = f"cat <<'{HEREDOC_DELIMITER}' > {dst}\n{data}\n{HEREDOC_DELIMITER}"
-    container.exec_run(command)
+    # TODO: test this
+    with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp_file:
+        tmp_file.write(data)
+        tmp_path = Path(tmp_file.name)
+    try:
+        copy_to_container(container, tmp_path, dst)
+    finally:
+        tmp_path.unlink()
 
 
-def remove_image(client, image_id, logger=None):
-    """
-    Remove a Docker image by ID.
-
-    Args:
-        client (docker.DockerClient): Docker client.
-        image_id (str): Image ID.
-        logger (logging.Logger): Logger to use for output. If None, print to stdout.
-    """
+def _get_log_objects(logger):
     if not logger:
         # if logger is None, print to stdout
         log_info = print
@@ -81,9 +68,22 @@ def remove_image(client, image_id, logger=None):
         raise_error = True
     else:
         # if logger is a logger object, use it
-        log_error = logger.info
         log_info = logger.info
+        log_error = logger.info
         raise_error = False
+    return (log_info, log_error, raise_error)
+
+
+def remove_image(client, image_id, logger=None):
+    """
+    Remove a Docker image by ID.
+
+    Args:
+        client (docker.DockerClient): Docker client.
+        image_id (str): Image ID.
+        logger (logging.Logger): Logger to use for output. If None, print to stdout.
+    """
+    log_info, log_error, raise_error = _get_log_objects(logger)
     try:
         log_info(f"Attempting to remove image {image_id}...")
         client.images.remove(image_id, force=True)
@@ -111,23 +111,7 @@ def cleanup_container(client, container, logger):
 
     container_id = container.id
 
-    if not logger:
-        # if logger is None, print to stdout
-        log_error = print
-        log_info = print
-        raise_error = True
-    elif logger == "quiet":
-        # if logger is "quiet", don't print anything
-        log_info = lambda x: None
-        log_error = lambda x: None
-        raise_error = True
-    else:
-        # if logger is a logger object, use it
-        log_error = logger.info
-        log_info = logger.info
-        raise_error = False
-
-    # Attempt to stop the container
+    log_info, log_error, raise_error = _get_log_objects(logger)
     try:
         if container:
             log_info(f"Attempting to stop container {container.name}...")
@@ -137,11 +121,8 @@ def cleanup_container(client, container, logger):
             f"Failed to stop container {container.name}: {e}. Trying to forcefully kill..."
         )
         try:
-            # Get the PID of the container
             container_info = client.api.inspect_container(container_id)
             pid = container_info["State"].get("Pid", 0)
-
-            # If container PID found, forcefully kill the container
             if pid > 0:
                 log_info(
                     f"Forcefully killing container {container.name} with PID {pid}..."
@@ -156,8 +137,6 @@ def cleanup_container(client, container, logger):
                 f"Failed to forcefully kill container {container.name}: {e2}\n"
                 f"{traceback.format_exc()}"
             )
-
-    # Attempt to remove the container
     try:
         log_info(f"Attempting to remove container {container.name}...")
         container.remove(force=True)
@@ -171,7 +150,7 @@ def cleanup_container(client, container, logger):
         )
 
 
-def exec_run_with_timeout(container, cmd, timeout: int | None = 60):
+def exec_run_with_timeout(container, cmd, timeout: int = 60):
     """
     Run a command in a container with a timeout.
 
@@ -180,13 +159,11 @@ def exec_run_with_timeout(container, cmd, timeout: int | None = 60):
         cmd (str): Command to run.
         timeout (int): Timeout in seconds.
     """
-    # Local variables to store the result of executing the command
     exec_result = b""
     exec_id = None
     exception = None
     timed_out = False
 
-    # Wrapper function to run the command
     def run_command():
         nonlocal exec_result, exec_id, exception
         try:
@@ -216,44 +193,6 @@ def exec_run_with_timeout(container, cmd, timeout: int | None = 60):
     return exec_result.decode(), timed_out, end_time - start_time
 
 
-def find_dependent_images(client: docker.DockerClient, image_name: str):
-    """
-    Find all images that are built upon `image_name` image
-
-    Args:
-        client (docker.DockerClient): Docker client.
-        image_name (str): Name of the base image.
-    """
-    dependent_images = []
-
-    # Get all local images
-    all_images = client.images.list()
-
-    # Get the ID of the base image
-    try:
-        base_image = client.images.get(image_name)
-        base_image_id = base_image.id
-    except docker.errors.ImageNotFound:
-        print(f"Base image {image_name} not found.")
-        return []
-
-    for image in all_images:
-        # Skip the base image itself
-        if image.id == base_image_id:
-            continue
-
-        # Check if the base image is in this image's history
-        history = image.history()
-        for layer in history:
-            if layer["Id"] == base_image_id:
-                # If found, add this image to the dependent images list
-                tags = image.tags
-                dependent_images.append(tags[0] if tags else image.id)
-                break
-
-    return dependent_images
-
-
 def list_images(client: docker.DockerClient):
     """
     List all images from the Docker client.
@@ -281,7 +220,7 @@ def clean_images(
     removed = 0
     print("Cleaning cached images...")
     for image_name in images:
-        if should_remove(image_name, cache_level, clean, prior_images):
+        if should_remove(image_name, clean, prior_images):
             try:
                 remove_image(client, image_name, "quiet")
                 removed += 1
@@ -291,20 +230,9 @@ def clean_images(
     print(f"Removed {removed} images.")
 
 
-def should_remove(image_name: str, cache_level: str, clean: bool, prior_images: set):
+def should_remove(image_name: str, clean: bool, prior_images: set):
     """
     Determine if an image should be removed based on cache level and clean flag.
     """
     existed_before = image_name in prior_images
-    if "/" in image_name:
-        image_name = image_name.split("/", 1)[-1]
-    if image_name.startswith("sweb.base"):
-        if cache_level in {"none"} and (clean or not existed_before):
-            return True
-    elif image_name.startswith("sweb.env"):
-        if cache_level in {"none", "base"} and (clean or not existed_before):
-            return True
-    elif image_name.startswith("sweb.eval"):
-        if cache_level in {"none", "base", "env"} and (clean or not existed_before):
-            return True
-    return False
+    return clean and not existed_before

@@ -16,9 +16,6 @@ from swebench.harness.constants import (
     APPLY_PATCH_FAIL,
     APPLY_PATCH_PASS,
     CONTAINER_PATCH_FILE,
-    KEY_INSTANCE_ID,
-    KEY_MODEL,
-    KEY_PREDICTION,
     LOG_REPORT,
     LOG_INSTANCE,
     LOG_TEST_OUTPUT,
@@ -141,7 +138,7 @@ def run_instance(
     """
     # Set up logging directory
     instance_id = test_spec.instance_id
-    model_name_or_path = pred.get(KEY_MODEL, "None").replace("/", "__")
+    model_name_or_path = pred.get("model_name_or_path", "None").replace("/", "__")
     log_dir = RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
 
     # Set up report file
@@ -178,7 +175,7 @@ def run_instance(
 
         # Copy model prediction as patch file to container
         patch_file = Path(log_dir / "patch.diff")
-        patch_file.write_text(pred[KEY_PREDICTION] or "")
+        patch_file.write_text(pred["model_patch"] or "")
         logger.info(
             f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
         )
@@ -353,7 +350,7 @@ def get_dataset_from_preds(
     """
     # load dataset
     dataset = load_swebench_dataset(dataset_name, split)
-    dataset_ids = {i[KEY_INSTANCE_ID] for i in dataset}
+    dataset_ids = {i["instance_id"] for i in dataset}
 
     if instance_ids:
         # check that all instance IDs have predictions
@@ -373,66 +370,66 @@ def get_dataset_from_preds(
             )
         )
     if instance_ids:
-        dataset = [i for i in dataset if i[KEY_INSTANCE_ID] in instance_ids]
+        dataset = [i for i in dataset if i["instance_id"] in instance_ids]
 
     if rewrite_reports:
         # we only return instances that have existing test outputs
         test_output_ids = set()
         for instance in dataset:
-            if instance[KEY_INSTANCE_ID] not in predictions:
+            if instance["instance_id"] not in predictions:
                 continue
-            prediction = predictions[instance[KEY_INSTANCE_ID]]
+            prediction = predictions[instance["instance_id"]]
             test_output_file = (
                 RUN_EVALUATION_LOG_DIR
                 / run_id
                 / prediction["model_name_or_path"].replace("/", "__")
-                / prediction[KEY_INSTANCE_ID]
+                / prediction["instance_id"]
                 / "test_output.txt"
             )
             if test_output_file.exists():
-                test_output_ids.add(instance[KEY_INSTANCE_ID])
+                test_output_ids.add(instance["instance_id"])
         dataset = [
             i
             for i in dataset
-            if i[KEY_INSTANCE_ID] in prediction_ids
-            and i[KEY_INSTANCE_ID] in test_output_ids
+            if i["instance_id"] in prediction_ids
+            and i["instance_id"] in test_output_ids
         ]
         return dataset
 
     # check which instance IDs have already been run
     completed_ids = set()
     for instance in dataset:
-        if instance[KEY_INSTANCE_ID] not in prediction_ids:
+        if instance["instance_id"] not in prediction_ids:
             # skip instances without predictions
             continue
-        prediction = predictions[instance[KEY_INSTANCE_ID]]
+        prediction = predictions[instance["instance_id"]]
         report_file = (
             RUN_EVALUATION_LOG_DIR
             / run_id
-            / prediction[KEY_MODEL].replace("/", "__")
-            / prediction[KEY_INSTANCE_ID]
+            / prediction["model_name_or_path"].replace("/", "__")
+            / prediction["instance_id"]
             / LOG_REPORT
         )
         if report_file.exists():
-            completed_ids.add(instance[KEY_INSTANCE_ID])
+            completed_ids.add(instance["instance_id"])
 
     if completed_ids and exclude_completed:
         # filter dataset to only instances that have not been run
         print(f"{len(completed_ids)} instances already run, skipping...")
-        dataset = [i for i in dataset if i[KEY_INSTANCE_ID] not in completed_ids]
+        dataset = [i for i in dataset if i["instance_id"] not in completed_ids]
 
     empty_patch_ids = {
         k
         for k, v in predictions.items()
-        if v[KEY_PREDICTION] == "" or v[KEY_PREDICTION] is None
+        if v["model_patch"] == "" or v["model_patch"] is None
     }
 
     # filter dataset to only instances with predictions
     dataset = [
         i
         for i in dataset
-        if i[KEY_INSTANCE_ID] in prediction_ids
-        and i[KEY_INSTANCE_ID] not in empty_patch_ids
+        if i["instance_id"] in prediction_ids
+        and i["instance_id"] not in empty_patch_ids
     ]
     return dataset
 
@@ -470,7 +467,7 @@ def main(
 
     # load predictions as map of instance_id to prediction
     predictions = get_predictions_from_file(predictions_path, dataset_name, split)
-    predictions = {pred[KEY_INSTANCE_ID]: pred for pred in predictions}
+    predictions = {pred["instance_id"]: pred for pred in predictions}
 
     # get dataset from predictions
     dataset = get_dataset_from_preds(

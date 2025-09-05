@@ -1,5 +1,5 @@
 _DOCKERFILE_BASE_RUST = r"""
-FROM --platform=linux/x86_64 rust:{rust_version}
+FROM --platform=linux/amd64 rust:{rust_version}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC

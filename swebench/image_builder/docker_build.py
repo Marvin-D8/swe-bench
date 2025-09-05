@@ -3,20 +3,17 @@ from __future__ import annotations
 import docker
 import docker.errors
 import logging
+import subprocess
 import sys
 import traceback
 
 from pathlib import Path
 
 from swebench.image_builder.constants import (
-    BASE_IMAGE_BUILD_DIR,
-    CONTAINER_USER,
-    ENV_IMAGE_BUILD_DIR,
-    INSTANCE_IMAGE_BUILD_DIR,
+    IMAGE_BUILDER_LOG_DIR,
 )
-from swebench.image_builder.docker_utils import cleanup_container, remove_image
+from swebench.image_builder.docker_utils import remove_image
 from swebench.image_builder.image_spec import (
-    get_image_specs_from_dataset,
     make_image_spec,
     ImageSpec,
 )
@@ -39,261 +36,108 @@ class BuildImageError(Exception):
         )
 
 
-
-
 def build_image(
-    image_name: str,
-    setup_scripts: dict,
-    dockerfile: str,
-    platform: str,
+    image_spec: ImageSpec,
     client: docker.DockerClient,
-    build_dir: Path,
+    platform: str = "linux/amd64",
     nocache: bool = False,
     dry_run: bool = False,
 ):
     """
-    Builds a docker image with the given name, setup scripts, dockerfile, and platform.
+    Builds a docker image using Docker Buildx with proper platform support.
+    This fixes the "no specific platform was requested" warning.
 
     Args:
-        image_name (str): Name of the image to build
-        setup_scripts (dict): Dictionary of setup script names to setup script contents
-        dockerfile (str): Contents of the Dockerfile
-        platform (str): Platform to build the image for
-        client (docker.DockerClient): Docker client to use for building the image
-        build_dir (Path): Directory for the build context (will also contain logs, scripts, and artifacts)
+        image_spec (ImageSpec): Image specification containing dockerfile and metadata
+        client (docker.DockerClient): Docker client (kept for compatibility)
+        platform (str): Platform to build the image for (overridden by image_spec.platform)
         nocache (bool): Whether to use the cache when building
         dry_run (bool): If True, create docker files and build contexts but don't build images
     """
-    # Create a logger for the build process
-    logger = setup_logger(image_name, build_dir / "build_image.log")
+    logger = setup_logger(image_spec.instance_id, IMAGE_BUILDER_LOG_DIR / image_spec.filesafe_name / "build_image.log")
     logger.info(
-        f"Building image {image_name}\n"
-        f"Using dockerfile:\n{dockerfile}\n"
-        f"Adding ({len(setup_scripts)}) setup scripts to image build repo"
+        f"Building image {image_spec.name}\n"
+        f"Using dockerfile:\n{image_spec.dockerfile}\n"
     )
+    dockerfile_path = IMAGE_BUILDER_LOG_DIR / image_spec.filesafe_name / "Dockerfile"
 
-    for setup_script_name, setup_script in setup_scripts.items():
-        logger.info(f"[SETUP SCRIPT] {setup_script_name}:\n{setup_script}")
     try:
-        # Write the setup scripts to the build directory
-        for setup_script_name, setup_script in setup_scripts.items():
-            setup_script_path = build_dir / setup_script_name
-            with open(setup_script_path, "w") as f:
-                f.write(setup_script)
-            if setup_script_name not in dockerfile:
-                logger.warning(
-                    f"Setup script {setup_script_name} may not be used in Dockerfile"
-                )
-
-        # Write the dockerfile to the build directory
-        dockerfile_path = build_dir / "Dockerfile"
         with open(dockerfile_path, "w") as f:
-            f.write(dockerfile)
-
-        # Build the image
+            f.write(image_spec.dockerfile)
+        
+        # Use image_spec.platform for consistency
+        target_platform = image_spec.platform
         logger.info(
-            f"Building docker image {image_name} in {build_dir} with platform {platform}"
+            f"Building docker image {image_spec.name} in {dockerfile_path} "
+            f"with platform {target_platform} using Docker Buildx"
         )
+        
         if not dry_run:
-            response = client.api.build(
-                path=str(build_dir),
-                tag=image_name,
-                rm=True,
-                forcerm=True,
-                decode=True,
-                platform=platform,
-                nocache=nocache,
+            # Build the docker buildx command
+            cmd = [
+                "docker", "buildx", "build",
+                f"--platform={target_platform}",
+                f"--tag={image_spec.name}",
+                f"--file={dockerfile_path}",
+                "--progress=plain",  # Plain text output for better parsing
+                "--load",  # Load the image into local Docker daemon
+            ]
+            
+            if nocache:
+                cmd.append("--no-cache")
+            
+            # Add build context as the last argument
+            cmd.append(str(dockerfile_path.parent))
+            
+            logger.info(f"Executing: {' '.join(cmd)}")
+            
+            # Run buildx with streaming output
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
             )
-
-            # Log the build process continuously
+            
             buildlog = ""
-            for chunk in response:
-                if "stream" in chunk:
-                    # Remove ANSI escape sequences from the log
-                    chunk_stream = ansi_escape(chunk["stream"])
-                    logger.info(chunk_stream.strip())
-                    buildlog += chunk_stream
-                elif "errorDetail" in chunk:
-                    # Decode error message, raise BuildError
-                    logger.error(
-                        f"Error: {ansi_escape(chunk['errorDetail']['message'])}"
-                    )
-                    raise docker.errors.BuildError(
-                        chunk["errorDetail"]["message"], buildlog
-                    )
-            logger.info("Image built successfully!")
+            # Stream output line by line (similar to original)
+            for line in process.stdout:
+                line = line.rstrip()
+                if line:
+                    # Remove ANSI codes from the log (same as original)
+                    clean_line = ansi_escape(line)
+                    logger.info(clean_line)
+                    buildlog += line + "\n"
+            
+            # Wait for process to complete
+            return_code = process.wait()
+            
+            if return_code == 0:
+                logger.info("Image built successfully!")
+            else:
+                error_msg = f"Docker buildx failed with exit code {return_code}"
+                logger.error(error_msg)
+                logger.error(f"Build log:\n{buildlog}")
+                raise BuildImageError(image_spec.name, error_msg, logger)
         else:
             logger.info("Build context created successfully!")
-    except docker.errors.BuildError as e:
-        logger.error(f"docker.errors.BuildError during {image_name}: {e}")
-        raise BuildImageError(image_name, str(e), logger) from e
+    except BuildImageError:
+        # Re-raise BuildImageError as-is
+        raise
     except Exception as e:
-        logger.error(f"Error building image {image_name}: {e}")
-        raise BuildImageError(image_name, str(e), logger) from e
+        logger.error(f"Error building image {image_spec.name}: {e}")
+        raise BuildImageError(image_spec.name, str(e), logger) from e
     finally:
         close_logger(logger)  # functions that create loggers should close them
 
 
-def build_base_images(
-    client: docker.DockerClient, dataset: list, force_rebuild: bool = False, dry_run: bool = False
-):
-    """
-    Builds the base images required for the dataset if they do not already exist.
-
-    Args:
-        client (docker.DockerClient): Docker client to use for building the images
-        dataset (list): List of test specs or dataset to build images for
-        force_rebuild (bool): Whether to force rebuild the images even if they already exist
-        dry_run (bool): If True, create docker files and build contexts but don't build images
-    """
-    # Get the base images to build from the dataset
-    image_specs = get_image_specs_from_dataset(dataset)
-    base_images = {
-        x.base_image_key: (x.base_dockerfile, x.platform) for x in image_specs
-    }
-
-    # Build the base images
-    for image_name, (dockerfile, platform) in base_images.items():
-        if not dry_run:
-            try:
-                # Check if the base image already exists
-                client.images.get(image_name)
-                if force_rebuild:
-                    # Remove the base image if it exists and force rebuild is enabled
-                    remove_image(client, image_name, "quiet")
-                else:
-                    print(f"Base image {image_name} already exists, skipping build.")
-                    continue
-            except docker.errors.ImageNotFound:
-                pass
-        # Build the base image (if it does not exist or force rebuild is enabled)
-        print(f"Building base image ({image_name})")
-        build_image(
-            image_name=image_name,
-            setup_scripts={},
-            dockerfile=dockerfile,
-            platform=platform,
-            client=client,
-            build_dir=BASE_IMAGE_BUILD_DIR / image_name.replace(":", "__"),
-            dry_run=dry_run,
-        )
-    print("Base images built successfully.")
-
-
-def get_env_configs_to_build(
-    client: docker.DockerClient,
-    dataset: list,
-    dry_run: bool = False,
-):
-    """
-    Returns a dictionary of image names to build scripts and dockerfiles for environment images.
-    Returns only the environment images that need to be built.
-
-    Args:
-        client (docker.DockerClient): Docker client to use for building the images
-        dataset (list): List of image specs or dataset to build images for
-        dry_run (bool): If True, skip base image dependency checks and include all environment images
-    """
-    image_scripts = dict()
-    base_images = dict()
-    image_specs = get_image_specs_from_dataset(dataset)
-
-    for image_spec in image_specs:
-        # Check if the base image exists (skip in dry run mode)
-        if not dry_run:
-            try:
-                if image_spec.base_image_key not in base_images:
-                    base_images[image_spec.base_image_key] = client.images.get(
-                        image_spec.base_image_key
-                    )
-                base_image = base_images[image_spec.base_image_key]
-            except docker.errors.ImageNotFound:
-                raise Exception(
-                    f"Base image {image_spec.base_image_key} not found for {image_spec.env_image_key}\n."
-                    "Please build the base images first."
-                )
-
-        # Check if the environment image exists (skip in dry run mode)
-        image_exists = False
-        if not dry_run:
-            try:
-                env_image = client.images.get(image_spec.env_image_key)
-                image_exists = True
-            except docker.errors.ImageNotFound:
-                pass
-        
-        if not image_exists:
-            # Add the environment image to the list of images to build
-            image_scripts[image_spec.env_image_key] = {
-                "setup_script": image_spec.setup_env_script,
-                "dockerfile": image_spec.env_dockerfile,
-                "platform": image_spec.platform,
-            }
-    return image_scripts
-
-
-def build_env_images(
-    client: docker.DockerClient,
-    dataset: list,
-    force_rebuild: bool = False,
-    max_workers: int = 4,
-    dry_run: bool = False,
-):
-    """
-    Builds the environment images required for the dataset if they do not already exist.
-
-    Args:
-        client (docker.DockerClient): Docker client to use for building the images
-        dataset (list): List of image specs or dataset to build images for
-        force_rebuild (bool): Whether to force rebuild the images even if they already exist
-        max_workers (int): Maximum number of workers to use for building images
-        dry_run (bool): If True, create docker files and build contexts but don't build images
-    """
-    # Get the environment images to build from the dataset
-    if force_rebuild:
-        env_image_keys = {x.env_image_key for x in get_image_specs_from_dataset(dataset)}
-        for key in env_image_keys:
-            remove_image(client, key, "quiet")
-    build_base_images(client, dataset, force_rebuild, dry_run=dry_run)
-    configs_to_build = get_env_configs_to_build(client, dataset, dry_run=dry_run)
-    if len(configs_to_build) == 0:
-        print("No environment images need to be built.")
-        return [], []
-    print(f"Total environment images to build: {len(configs_to_build)}")
-
-    args_list = list()
-    for image_name, config in configs_to_build.items():
-        args_list.append(
-            (
-                image_name,
-                {"setup_env.sh": config["setup_script"]},
-                config["dockerfile"],
-                config["platform"],
-                client,
-                ENV_IMAGE_BUILD_DIR / image_name.replace(":", "__"),
-                False,  # nocache
-                dry_run,
-            )
-        )
-
-    successful, failed = run_threadpool(build_image, args_list, max_workers)
-    # Show how many images failed to build
-    if len(failed) == 0:
-        print("All environment images built successfully.")
-    else:
-        print(f"{len(failed)} environment images failed to build.")
-
-    # Return the list of (un)successfuly built images
-    return successful, failed
-
-
 def build_instance_images(
     client: docker.DockerClient,
-    dataset: list,
+    image_specs: list,
     force_rebuild: bool = False,
     max_workers: int = 4,
-    namespace: str = None,
-    tag: str = None,
     dry_run: bool = False,
 ):
     """
@@ -307,31 +151,10 @@ def build_instance_images(
         dry_run (bool): If True, create docker files and build contexts but don't build images
     """
     # Build environment images (and base images as needed) first
-    image_specs = list(
-        map(
-            lambda x: make_image_spec(x, namespace=namespace, instance_image_tag=tag),
-            dataset,
-        )
-    )
     if force_rebuild:
         for spec in image_specs:
             remove_image(client, spec.instance_image_key, "quiet")
-    _, env_failed = build_env_images(client, image_specs, force_rebuild, max_workers, dry_run=dry_run)
-
-    if len(env_failed) > 0:
-        # Don't build images for instances that depend on failed-to-build env images
-        dont_run_specs = [
-            spec for spec in image_specs if spec.env_image_key in env_failed
-        ]
-        image_specs = [
-            spec for spec in image_specs if spec.env_image_key not in env_failed
-        ]
-        print(
-            f"Skipping {len(dont_run_specs)} instances - due to failed env image builds"
-        )
-    print(f"Building instance images for {len(image_specs)} instances")
     successful, failed = list(), list()
-
     # `logger` is set to None b/c logger is created in build-instage_image
     payloads = [(spec, client, None, False, dry_run) for spec in image_specs]
     # Build the instance images
@@ -363,66 +186,29 @@ def build_instance_image(
         nocache (bool): Whether to use the cache when building
         dry_run (bool): If True, create docker files and build contexts but don't build images
     """
-    # Set up logging for the build process
-    build_dir = INSTANCE_IMAGE_BUILD_DIR / image_spec.instance_image_key.replace(
-        ":", "__"
-    )
+    build_dir = IMAGE_BUILDER_LOG_DIR / image_spec.filesafe_name
     new_logger = False
     if logger is None:
         new_logger = True
-        logger = setup_logger(image_spec.instance_id, build_dir / "prepare_image.log")
+        logger = setup_logger(image_spec.instance_id, add_stdout=True)
 
-    # Get the image names and dockerfile for the instance image
-    image_name = image_spec.instance_image_key
-    env_image_name = image_spec.env_image_key
-    dockerfile = image_spec.instance_dockerfile
-
-    # Check that the env. image the instance image is based on exists (skip in dry run mode)
-    if not dry_run:
-        try:
-            env_image = client.images.get(env_image_name)
-        except docker.errors.ImageNotFound as e:
-            raise BuildImageError(
-                image_spec.instance_id,
-                f"Environment image {env_image_name} not found for {image_spec.instance_id}",
-                logger,
-            ) from e
-        logger.info(
-            f"Environment image {env_image_name} found for {image_spec.instance_id}\n"
-            f"Building instance image {image_name} for {image_spec.instance_id}"
-        )
-    else:
-        logger.info(
-            f"Building instance image {image_name} for {image_spec.instance_id}"
-        )
-
-    # Check if the instance image already exists (skip in dry run mode)
     image_exists = False
     if not dry_run:
         try:
-            client.images.get(image_name)
+            client.images.get(image_spec.name)
             image_exists = True
         except docker.errors.ImageNotFound:
             pass
 
-    # Build the instance image
     if not image_exists:
         build_image(
-            image_name=image_name,
-            setup_scripts={
-                "setup_repo.sh": image_spec.install_repo_script,
-            },
-            dockerfile=dockerfile,
-            platform=image_spec.platform,
+            image_spec=image_spec,
             client=client,
-            build_dir=build_dir,
             nocache=nocache,
             dry_run=dry_run,
         )
     else:
-        logger.info(f"Image {image_name} already exists, skipping build.")
+        logger.info(f"Image {image_spec.name} already exists, skipping build.")
 
     if new_logger:
         close_logger(logger)
-
-

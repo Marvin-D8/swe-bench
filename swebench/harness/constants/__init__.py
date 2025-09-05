@@ -32,11 +32,6 @@ FAIL_TO_FAIL = "FAIL_TO_FAIL"
 PASS_TO_PASS = "PASS_TO_PASS"
 PASS_TO_FAIL = "PASS_TO_FAIL"
 
-# Constants - Evaluation Keys  
-KEY_INSTANCE_ID = "instance_id"
-KEY_MODEL = "model_name_or_path"
-KEY_PREDICTION = "model_patch"
-
 # Constants - Evaluation Execution
 CONTAINER_PATCH_FILE = "/tmp/patch.diff"
 LOG_REPORT = "report.json"
