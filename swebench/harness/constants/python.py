@@ -1,8 +1,3 @@
-import yaml
-from importlib import resources
-import swebench.resources
-
-
 # Constants - Testing Commands
 TEST_PYTEST = "pytest --no-header -rA --tb=no -p no:cacheprovider"
 TEST_PYTEST_VERBOSE = "pytest -rA --tb=long -p no:cacheprovider"
@@ -1455,21 +1450,3 @@ USE_X86_PY = {
     "sympy__sympy-15222",
     "sympy__sympy-19201",
 }
-
-
-def _load_environment_yamls():
-    """Load environment.ymls from importlib resources and return as dictionary."""
-    with (
-        resources.files(swebench.resources)
-        .joinpath("swebench-og", "environment.ymls")
-        .open() as f
-    ):
-        data = yaml.safe_load(f)
-    result = {}
-    for instance_id, config in data.items():
-        if "environment" in config and "environment_yml" in config["environment"]:
-            result[instance_id] = config["environment"]["environment_yml"]
-    return result
-
-
-INSTANCE_ID_ENVIRONMENT_YAML = _load_environment_yamls()

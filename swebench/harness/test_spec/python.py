@@ -14,9 +14,8 @@ from swebench.harness.constants import (
     START_TEST_OUTPUT,
     END_TEST_OUTPUT,
     REPO_BASE_COMMIT_BRANCH,
-    INSTANCE_ID_ENVIRONMENT_YAML,
 )
-from swebench.harness.utils import get_modified_files
+from swebench.harness.utils import get_modified_files, load_cached_environment_yml
 from functools import cache
 
 HEADERS = {
@@ -318,11 +317,13 @@ def make_repo_script_list_py(
     return setup_commands
 
 
-def make_env_script_list_py_from_conda(instance, specs, env_name) -> list:
+def make_env_script_list_py_from_conda(
+    instance, specs, env_name, cached_environment_yml
+) -> list:
     HEREDOC_DELIMITER = "EOF_59812759871"
     reqs_commands = [
         "source /opt/miniconda3/bin/activate",
-        f"cat <<'{HEREDOC_DELIMITER}' > /root/environment.yml\n{INSTANCE_ID_ENVIRONMENT_YAML[instance['instance_id']]}\n{HEREDOC_DELIMITER}",
+        f"cat <<'{HEREDOC_DELIMITER}' > /root/environment.yml\n{cached_environment_yml}\n{HEREDOC_DELIMITER}",
         "conda env create -f /root/environment.yml",
         f"conda activate {env_name}",
     ]
@@ -334,8 +335,11 @@ def make_env_script_list_py(instance, specs, env_name) -> list:
     Creates the list of commands to set up the conda environment for testing.
     This is the setup script for the environment image.
     """
-    if instance["instance_id"] in INSTANCE_ID_ENVIRONMENT_YAML:
-        return make_env_script_list_py_from_conda(instance, specs, env_name)
+    cached_environment_yml = load_cached_environment_yml(instance["instance_id"])
+    if cached_environment_yml:
+        return make_env_script_list_py_from_conda(
+            instance, specs, env_name, cached_environment_yml
+        )
     HEREDOC_DELIMITER = "EOF_59812759871"
     reqs_commands = [
         "source /opt/miniconda3/bin/activate",
