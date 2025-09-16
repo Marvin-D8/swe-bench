@@ -1,3 +1,6 @@
+import sqlite3
+import importlib.resources as resources
+import swebench.resources
 from functools import cache
 from swebench.image_builder.dockerfile_gen._swebench.constants import (
     MAP_REPO_TO_ENV_YML_PATHS,
@@ -255,6 +258,30 @@ def get_test_directives(instance: dict) -> list:
 
     return directives
 
+    # branch = REPO_BASE_COMMIT_BRANCH.get(repo, {}).get(base_commit, "")
+    # branch = f"--branch {branch}" if branch else ""
+    # setup_commands = [
+    #     f"git clone -o origin {branch} --single-branch https://github.com/{repo} {repo_directory}",
+    #     f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
+    #     f"cd {repo_directory}",
+    #     f"git reset --hard {base_commit}",
+    #     # Remove the remote and tags so the agent won't see newer commits.
+    #     "git remote remove origin",
+    #     # Remove only tags pointing to commits after target timestamp
+    #     f"TARGET_TIMESTAMP=$(git show -s --format=%ci {base_commit})",
+    #     'git tag -l | while read tag; do TAG_COMMIT=$(git rev-list -n 1 "$tag"); TAG_TIME=$(git show -s --format=%ci "$TAG_COMMIT"); if [[ "$TAG_TIME" > "$TARGET_TIMESTAMP" ]]; then git tag -d "$tag"; fi; done',
+    #     "git reflog expire --expire=now --all",
+    #     "git gc --prune=now --aggressive",
+    #     # Verify future logs aren't available
+    #     "AFTER_TIMESTAMP=$(date -d \"$TARGET_TIMESTAMP + 1 second\" '+%Y-%m-%d %H:%M:%S')",
+    #     'COMMIT_COUNT=$(git log --oneline --all --since="$AFTER_TIMESTAMP" | wc -l)',
+    #     '[ "$COMMIT_COUNT" -eq 0 ] || exit 1',
+    #     # Make sure conda is available for later use
+    #     "source /opt/miniconda3/bin/activate",
+    #     f"conda activate {env_name}",
+    #     'echo "Current environment: $CONDA_DEFAULT_ENV"',
+    # ]
+
 
 def make_repo_script_list(specs, repo, base_commit) -> str:
     """
@@ -264,21 +291,20 @@ def make_repo_script_list(specs, repo, base_commit) -> str:
     branch = REPO_BASE_COMMIT_BRANCH.get(repo, {}).get(base_commit, "")
     branch = f"--branch {branch}" if branch else ""
     setup_commands = [
-        "# Clone and setup repository",
+        # Clone and setup repository",
         f"git clone -o origin {branch} --single-branch https://github.com/{repo} {CONTAINER_WORKDIR}",
         f"chmod -R 777 {CONTAINER_WORKDIR}",  # So nonroot user can run tests
         f"cd {CONTAINER_WORKDIR}",
         f"git reset --hard {base_commit}",
         "git remote remove origin",
-        "git tag -d $(git tag -l)",
+        f"TARGET_TIMESTAMP=$(git show -s --format=%ci {base_commit})",
+        'git tag -l | while read tag; do TAG_COMMIT=$(git rev-list -n 1 "$tag"); TAG_TIME=$(git show -s --format=%ci "$TAG_COMMIT"); if [[ "$TAG_TIME" > "$TARGET_TIMESTAMP" ]]; then git tag -d "$tag"; fi; done',
         "git reflog expire --expire=now --all",
         "git gc --prune=now --aggressive",
-        f"TARGET_TIMESTAMP=$(git show -s --format=%ci {base_commit})",
         "AFTER_TIMESTAMP=$(date -d \"$TARGET_TIMESTAMP + 1 second\" '+%Y-%m-%d %H:%M:%S')",
         'COMMIT_COUNT=$(git log --oneline --all --since="$AFTER_TIMESTAMP" | wc -l)',
         '[ "$COMMIT_COUNT" -eq 0 ] || exit 1',
-        "",
-        "# Setup conda environment and install",
+        # Setup conda environment and install
         "source /opt/miniconda3/bin/activate",
         f"conda activate {CONTAINER_ENV_NAME}",
         'echo "Current environment: $CONDA_DEFAULT_ENV"',
@@ -326,11 +352,46 @@ def make_heredoc_run_command(commands: list[str]) -> str:
     return f"RUN <<{delimiter}\n{heredoc_content}\n{delimiter}\n"
 
 
+def load_cached_environment_yml(instance_id: str) -> str:
+    """
+    Load environment.yml from cache
+    """
+    conn = sqlite3.connect(
+        resources.files(swebench.resources) / "swebench-og" / "environments.yml.db"
+    )
+    c = conn.cursor()
+    c.execute(
+        "SELECT environment_yml FROM environments WHERE instance_id = ?", (instance_id,)
+    )
+    result = c.fetchone()
+    conn.close()
+    if result:
+        return result[0]
+    else:
+        return None
+
+
+def make_env_script_list_from_conda(instance, specs, cached_environment_yml) -> list:
+    HEREDOC_DELIMITER = "EOF_59812759871"
+    reqs_commands = [
+        "source /opt/miniconda3/bin/activate",
+        f"cat <<'{HEREDOC_DELIMITER}' > /root/environment.yml\n{cached_environment_yml}\n{HEREDOC_DELIMITER}",
+        "conda env create -f /root/environment.yml",
+        f"conda activate {CONTAINER_ENV_NAME}",
+    ]
+    return reqs_commands
+
+
 def make_env_script_list(instance, specs) -> str:
     """
     Creates a heredoc-style RUN command to set up the conda environment for testing.
     This is the setup script for the environment image.
     """
+    cached_environment_yml = load_cached_environment_yml(instance["instance_id"])
+    if cached_environment_yml:
+        return make_heredoc_run_command(
+            make_env_script_list_from_conda(instance, specs, cached_environment_yml)
+        )
     reqs_commands = [
         "source /opt/miniconda3/bin/activate",
     ]
