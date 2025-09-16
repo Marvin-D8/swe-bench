@@ -13,8 +13,6 @@ import traceback
 
 from dataclasses import dataclass
 from pathlib import Path
-import logging
-import sys
 from swebench.logger import setup_logger
 
 

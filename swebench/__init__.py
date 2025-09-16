@@ -15,10 +15,8 @@ from swebench.image_builder import (
 
 from swebench.harness.docker_utils import (
     cleanup_container,
-    remove_image,
     copy_to_container,
     exec_run_with_timeout,
-    list_images,
 )
 
 from swebench.harness.grading import (

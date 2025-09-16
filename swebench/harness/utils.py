@@ -1,8 +1,6 @@
 import json
-import logging
 import re
 import requests
-import sys
 import traceback
 
 from argparse import ArgumentTypeError
@@ -13,7 +11,6 @@ from pathlib import Path
 from tqdm import tqdm
 from typing import cast
 from swebench.constants import SWEbenchInstance
-from unidiff import PatchSet
 
 load_dotenv()
 
@@ -315,22 +312,3 @@ def get_repo_file(repo, commit, filepath):
         return None
     except:
         return None
-
-
-def get_modified_files(patch: str) -> list[str]:
-    """
-    Get the list of modified files in a patch
-    """
-    source_files = []
-    for file in PatchSet(patch):
-        if file.source_file != "/dev/null":
-            source_files.append(file.source_file)
-    source_files = [x[2:] for x in source_files if x.startswith("a/")]
-    return source_files
-
-
-def ansi_escape(text: str) -> str:
-    """
-    Remove ANSI codes from text
-    """
-    return re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])").sub("", text)

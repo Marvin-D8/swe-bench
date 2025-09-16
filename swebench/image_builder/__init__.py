@@ -17,12 +17,7 @@ from swebench.image_builder.docker_build import (
     BuildImageError,
 )
 from swebench.image_builder.docker_utils import (
-    cleanup_container,
-    copy_to_container,
-    exec_run_with_timeout,
-    list_images,
     remove_image,
-    clean_images,
 )
 
 __all__ = [
@@ -34,10 +29,5 @@ __all__ = [
     "build_instance_images",
     "build_instance_image",
     "BuildImageError",
-    "cleanup_container",
-    "copy_to_container",
-    "exec_run_with_timeout",
-    "list_images",
     "remove_image",
-    "clean_images",
 ]

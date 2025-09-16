@@ -27,7 +27,6 @@ from swebench.harness.docker_utils import (
     exec_run_with_timeout,
 )
 import logging
-import sys
 from swebench.harness.grading import get_eval_report
 from swebench.harness.reporting import make_run_report
 from swebench.harness.modal_eval import (
@@ -41,7 +40,6 @@ from swebench.harness.utils import (
     get_predictions_from_file,
     run_threadpool,
     str2bool,
-    optional_str,
 )
 from swebench.logger import setup_logger, close_logger
 
@@ -89,7 +87,7 @@ def create_container(
             client.images.get(test_spec.image)
         except docker.errors.ImageNotFound:
             try:
-                logger.info(f"Image not found locally, attempting to pull...")
+                logger.info("Image not found locally, attempting to pull...")
                 client.images.pull(test_spec.image)
             except docker.errors.ImageNotFound:
                 raise EvaluationError(

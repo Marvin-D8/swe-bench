@@ -2,6 +2,7 @@ import sqlite3
 import importlib.resources as resources
 import swebench.resources
 from functools import cache
+from swebench.utils import generate_heredoc_delimiter
 from swebench.image_builder.dockerfile_gen._swebench.constants import (
     MAP_REPO_TO_ENV_YML_PATHS,
     MAP_REPO_TO_INSTALL,
@@ -19,12 +20,11 @@ from swebench.harness.constants import (
     START_TEST_OUTPUT,
     END_TEST_OUTPUT,
 )
-from swebench.harness.utils import get_modified_files
+from swebench.utils import get_modified_files
 import posixpath
 import requests
 import re
 import os
-from hashlib import blake2b
 
 
 @cache
@@ -258,30 +258,6 @@ def get_test_directives(instance: dict) -> list:
 
     return directives
 
-    # branch = REPO_BASE_COMMIT_BRANCH.get(repo, {}).get(base_commit, "")
-    # branch = f"--branch {branch}" if branch else ""
-    # setup_commands = [
-    #     f"git clone -o origin {branch} --single-branch https://github.com/{repo} {repo_directory}",
-    #     f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
-    #     f"cd {repo_directory}",
-    #     f"git reset --hard {base_commit}",
-    #     # Remove the remote and tags so the agent won't see newer commits.
-    #     "git remote remove origin",
-    #     # Remove only tags pointing to commits after target timestamp
-    #     f"TARGET_TIMESTAMP=$(git show -s --format=%ci {base_commit})",
-    #     'git tag -l | while read tag; do TAG_COMMIT=$(git rev-list -n 1 "$tag"); TAG_TIME=$(git show -s --format=%ci "$TAG_COMMIT"); if [[ "$TAG_TIME" > "$TARGET_TIMESTAMP" ]]; then git tag -d "$tag"; fi; done',
-    #     "git reflog expire --expire=now --all",
-    #     "git gc --prune=now --aggressive",
-    #     # Verify future logs aren't available
-    #     "AFTER_TIMESTAMP=$(date -d \"$TARGET_TIMESTAMP + 1 second\" '+%Y-%m-%d %H:%M:%S')",
-    #     'COMMIT_COUNT=$(git log --oneline --all --since="$AFTER_TIMESTAMP" | wc -l)',
-    #     '[ "$COMMIT_COUNT" -eq 0 ] || exit 1',
-    #     # Make sure conda is available for later use
-    #     "source /opt/miniconda3/bin/activate",
-    #     f"conda activate {env_name}",
-    #     'echo "Current environment: $CONDA_DEFAULT_ENV"',
-    # ]
-
 
 def make_repo_script_list(specs, repo, base_commit) -> str:
     """
@@ -346,9 +322,7 @@ def make_heredoc_run_command(commands: list[str]) -> str:
         return ""
 
     heredoc_content = "\n".join(["#!/bin/bash", "set -euxo pipefail", *commands])
-    delimiter = f"EOF_{blake2b(heredoc_content.encode()).hexdigest()[:12]}"
-    while delimiter in heredoc_content:
-        delimiter = f"EOF_{blake2b(heredoc_content.encode() + delimiter.encode()).hexdigest()[:12]}"
+    delimiter = generate_heredoc_delimiter(heredoc_content)
     return f"RUN <<{delimiter}\n{heredoc_content}\n{delimiter}\n"
 
 
@@ -372,10 +346,10 @@ def load_cached_environment_yml(instance_id: str) -> str:
 
 
 def make_env_script_list_from_conda(instance, specs, cached_environment_yml) -> list:
-    HEREDOC_DELIMITER = "EOF_59812759871"
+    delimiter = generate_heredoc_delimiter(cached_environment_yml)
     reqs_commands = [
         "source /opt/miniconda3/bin/activate",
-        f"cat <<'{HEREDOC_DELIMITER}' > /root/environment.yml\n{cached_environment_yml}\n{HEREDOC_DELIMITER}",
+        f"cat <<'{delimiter}' > /root/environment.yml\n{cached_environment_yml}\n{delimiter}",
         "conda env create -f /root/environment.yml",
         f"conda activate {CONTAINER_ENV_NAME}",
     ]
@@ -443,12 +417,10 @@ def make_eval_script_list(instance, specs, base_commit, test_patch) -> list:
     """
     Applies the test patch and runs the tests.
     """
-    HEREDOC_DELIMITER = "EOF_114329324912"
     test_files = get_modified_files(test_patch)
-    # Reset test files to the state they should be in before the patch.
-    reset_tests_command = f"git checkout {base_commit} {' '.join(test_files)}"
+    delimiter = generate_heredoc_delimiter(test_patch)
     apply_test_patch_command = (
-        f"git apply -v - <<'{HEREDOC_DELIMITER}'\n{test_patch}\n{HEREDOC_DELIMITER}"
+        f"git apply -v - <<'{delimiter}'\n{test_patch}\n{delimiter}"
     )
     test_command = " ".join(
         [
@@ -477,6 +449,8 @@ def make_eval_script_list(instance, specs, base_commit, test_patch) -> list:
     ]
     if "install" in specs:
         eval_commands.append(specs["install"])
+    # Reset test files to the state they should be in before the patch.
+    reset_tests_command = f"git checkout {base_commit} {' '.join(test_files)}"
     eval_commands += [
         reset_tests_command,
         apply_test_patch_command,

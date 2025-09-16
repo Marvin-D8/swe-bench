@@ -65,7 +65,6 @@ def make_test_spec(
     repo = instance["repo"]
     version = instance.get("version")
     base_commit = instance["base_commit"]
-    problem_statement = instance.get("problem_statement")
     test_patch = instance["test_patch"]
 
     if "image" not in instance:

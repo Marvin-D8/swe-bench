@@ -16,7 +16,7 @@ from swebench.data_specs import (
     MAP_REPO_TO_INSTALL,
     MAP_REPO_TO_REQS_PATHS,
 )
-from swebench.harness.utils import get_modified_files
+from swebench.utils import get_modified_files, generate_heredoc_delimiter
 from functools import cache
 
 HEADERS = {
@@ -312,7 +312,6 @@ def make_env_script_list_py(instance, specs, env_name) -> list:
     Creates the list of commands to set up the conda environment for testing.
     This is the setup script for the environment image.
     """
-    HEREDOC_DELIMITER = "EOF_59812759871"
     reqs_commands = [
         "source /opt/miniconda3/bin/activate",
     ]
@@ -326,8 +325,9 @@ def make_env_script_list_py(instance, specs, env_name) -> list:
         # Install dependencies
         reqs = get_requirements(instance)
         path_to_reqs = "$HOME/requirements.txt"
+        delimeter = generate_heredoc_delimiter(reqs)
         reqs_commands.append(
-            f"cat <<'{HEREDOC_DELIMITER}' > {path_to_reqs}\n{reqs}\n{HEREDOC_DELIMITER}"
+            f"cat <<'{delimeter}' > {path_to_reqs}\n{reqs}\n{delimeter}"
         )
         cmd = f"conda activate {env_name} && python -m pip install -r {path_to_reqs}"
         reqs_commands.append(cmd)
@@ -336,8 +336,9 @@ def make_env_script_list_py(instance, specs, env_name) -> list:
         # Create environment from yml
         reqs = get_environment_yml(instance, env_name)
         path_to_reqs = "environment.yml"
+        delimiter = generate_heredoc_delimiter(reqs)
         reqs_commands.append(
-            f"cat <<'{HEREDOC_DELIMITER}' > {path_to_reqs}\n{reqs}\n{HEREDOC_DELIMITER}"
+            f"cat <<'{delimiter}' > {path_to_reqs}\n{reqs}\n{delimiter}"
         )
         if "no_use_env" in specs and specs["no_use_env"]:
             # `conda create` based installation
@@ -380,12 +381,12 @@ def make_eval_script_list_py(
     """
     Applies the test patch and runs the tests.
     """
-    HEREDOC_DELIMITER = "EOF_114329324912"
+    delimiter = generate_heredoc_delimiter(test_patch)
     test_files = get_modified_files(test_patch)
     # Reset test files to the state they should be in before the patch.
     reset_tests_command = f"git checkout {base_commit} {' '.join(test_files)}"
     apply_test_patch_command = (
-        f"git apply -v - <<'{HEREDOC_DELIMITER}'\n{test_patch}\n{HEREDOC_DELIMITER}"
+        f"git apply -v - <<'{delimiter}'\n{test_patch}\n{delimiter}"
     )
     test_command = " ".join(
         [

@@ -2,7 +2,7 @@ import re
 
 from swebench.harness.constants import TestStatus
 from swebench.harness.test_spec.test_spec import TestSpec
-from swebench.harness.utils import ansi_escape
+from swebench.utils import ansi_escape
 
 
 def parse_log_calypso(log: str, test_spec: TestSpec) -> dict[str, str]:

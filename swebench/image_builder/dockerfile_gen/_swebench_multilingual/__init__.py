@@ -6,14 +6,6 @@ from swebench.image_builder.dockerfile_gen._swebench_multilingual.go import (
     _DOCKERFILE_BASE_GO,
     MAP_REPO_VERSION_TO_SPECS_GO,
 )
-from swebench.image_builder.dockerfile_gen._swebench_multilingual.go import (
-    _DOCKERFILE_BASE_GO,
-    MAP_REPO_VERSION_TO_SPECS_GO,
-)
-from swebench.image_builder.dockerfile_gen._swebench_multilingual.go import (
-    _DOCKERFILE_BASE_GO,
-    MAP_REPO_VERSION_TO_SPECS_GO,
-)
 from swebench.image_builder.dockerfile_gen._swebench_multilingual.java import (
     _DOCKERFILE_BASE_JAVA,
     MAP_REPO_VERSION_TO_SPECS_JAVA,

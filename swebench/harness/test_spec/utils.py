@@ -2,7 +2,7 @@ from swebench.harness.constants import (
     END_TEST_OUTPUT,
     START_TEST_OUTPUT,
 )
-from swebench.harness.utils import get_modified_files
+from swebench.utils import get_modified_files, generate_heredoc_delimiter
 from swebench.data_specs import get_data_spec
 
 
@@ -17,50 +17,12 @@ def get_test_cmds(instance) -> list:
 # MARK: Script Creation Functions
 
 
-def make_repo_script_list_common(
-    specs, repo, repo_directory, base_commit, env_name
-) -> list:
-    """
-    Create a list of bash commands to set up the repository for testing.
-    This is the setup script for the instance image.
-    """
-    setup_commands = [
-        f"git clone -o origin https://github.com/{repo} {repo_directory}",
-        f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
-        f"cd {repo_directory}",
-        f"git reset --hard {base_commit}",
-        "git remote remove origin",  # Remove the remote so the agent won't see newer commits
-    ]
-    if "pre_install" in specs:
-        setup_commands.extend(specs["pre_install"])
-    if "install" in specs:
-        setup_commands.extend(specs["install"])
-    if "build" in specs:
-        setup_commands.extend(specs["build"])
-    return setup_commands
-
-
-def make_env_script_list_common(instance, specs, env_name) -> list:
-    """
-    Creates the list of commands to set up the environment for testing.
-    This is the setup script for the environment image.
-    """
-    reqs_commands = []
-    if "apt-pkgs" in specs:
-        reqs_commands += [
-            "apt-get update",
-            f"apt-get install -y {' '.join(specs['apt-pkgs'])}",
-        ]
-    return reqs_commands
-
-
 def make_eval_script_list_common(
     instance, specs, env_name, repo_directory, base_commit, test_patch
 ) -> list:
     """
     Applies the test patch and runs the tests.
     """
-    HEREDOC_DELIMITER = "EOF_114329324912"
     test_files = get_modified_files(test_patch)
     # Reset test files to the state they should be in before the patch.
     if test_files:
@@ -72,7 +34,10 @@ def make_eval_script_list_common(
     if "build" in specs:
         build_commands.extend(specs["build"])
 
-    apply_test_patch_command = f"git apply --verbose --reject - <<'{HEREDOC_DELIMITER}'\n{test_patch}\n{HEREDOC_DELIMITER}"
+    delimiter = generate_heredoc_delimiter(test_patch)
+    apply_test_patch_command = (
+        f"git apply --verbose --reject - <<'{delimiter}'\n{test_patch}\n{delimiter}"
+    )
     test_commands = get_test_cmds(instance)
     eval_commands = [
         f"cd {repo_directory}",
