@@ -179,7 +179,7 @@ def run_instance(
         )
         copy_to_container(container, patch_file, PurePosixPath(CONTAINER_PATCH_FILE))
 
-        # Attempt to apply patch to container (TODO: FIX THIS)
+        # Attempt to apply patch to container (TODO: test this)
         applied_patch = False
         for git_apply_cmd in GIT_APPLY_CMDS:
             val = container.exec_run(
