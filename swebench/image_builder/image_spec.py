@@ -40,7 +40,7 @@ class ImageSpec:
         if self.is_remote_image:
             # docker hub doesn't allow dunders in image names, so we replace them with _1776_
             key = f"{self.namespace}/{key}".replace("__", "_1776_")
-        return key
+        return key.lower()
 
     @property
     def filesafe_name(self):
