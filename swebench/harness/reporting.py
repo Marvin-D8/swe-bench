@@ -7,7 +7,7 @@ from swebench.harness.constants import (
     RUN_EVALUATION_LOG_DIR,
     LOG_REPORT,
 )
-from swebench.harness.docker_utils import list_images
+from swebench.image_builder.docker_utils import list_images
 from swebench.harness.test_spec.test_spec import make_test_spec
 
 

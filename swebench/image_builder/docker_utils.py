@@ -44,3 +44,11 @@ def remove_image(client, image_id, logger=None):
         if raise_error:
             raise e
         log_error(f"Failed to remove image {image_id}: {e}\n{traceback.format_exc()}")
+
+
+def list_images(client: docker.DockerClient):
+    """
+    List all images from the Docker client.
+    """
+    # don't use this in multi-threaded context
+    return {tag for i in client.images.list(all=True) for tag in i.tags}

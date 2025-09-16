@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import docker
 import os
 import signal
 import tarfile
@@ -177,11 +176,3 @@ def exec_run_with_timeout(container, cmd, timeout: int | None = 60):
         timed_out = True
     end_time = time.time()
     return exec_result.decode(), timed_out, end_time - start_time
-
-
-def list_images(client: docker.DockerClient):
-    """
-    List all images from the Docker client.
-    """
-    # don't use this in multi-threaded context
-    return {tag for i in client.images.list(all=True) for tag in i.tags}
