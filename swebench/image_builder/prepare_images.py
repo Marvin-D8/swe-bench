@@ -2,7 +2,6 @@ import docker
 import resource
 
 from argparse import ArgumentParser
-from pathlib import Path
 
 from swebench.image_builder.image_spec import load_swebench_dataset_image_specs
 from swebench.image_builder.docker_build import build_instance_images
@@ -125,7 +124,7 @@ if __name__ == "__main__":
         help="Namespace to use for the images (default: None)",
     )
     parser.add_argument(
-        "--tag", type=str, default=None, help="Tag to use for the images"
+        "--tag", type=str, default="latest", help="Tag to use for the images"
     )
     parser.add_argument(
         "--dry_run",

@@ -1,7 +1,5 @@
-import platform
-
 from dataclasses import dataclass
-from typing import Any, Optional, Union, cast
+from typing import Optional, Union, cast
 
 from swebench.constants import (
     SWEbenchInstance,
@@ -38,7 +36,7 @@ class ImageSpec:
 
     @property
     def name(self):
-        key = f"{self.arch}.{self.instance_id.lower()}:{self.tag}"
+        key = f"{self.arch}.{self.instance_id}:{self.tag}"
         if self.is_remote_image:
             # docker hub doesn't allow dunders in image names, so we replace them with _1776_
             key = f"{self.namespace}/{key}".replace("__", "_1776_")

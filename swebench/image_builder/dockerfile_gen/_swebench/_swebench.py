@@ -495,9 +495,9 @@ def _get_dockerfile(instance) -> str:
     specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
     env_script = make_env_script_list(instance, specs)
     repo_script = make_repo_script_list(specs, repo, base_commit)
-    monolithic_dockerfile = _DOCKERFILE_BASE
-    monolithic_dockerfile += f"\n{env_script}\n" if env_script else ""
-    monolithic_dockerfile += '\nRUN echo "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed" > /root/.bashrc\n'
-    monolithic_dockerfile += f"\n{repo_script}\n" if repo_script else ""
-    monolithic_dockerfile += "\nWORKDIR /testbed/\n"
-    return monolithic_dockerfile
+    dockerfile = _DOCKERFILE_BASE
+    dockerfile += f"\n{env_script}\n" if env_script else ""
+    dockerfile += '\nRUN echo "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed" > /root/.bashrc\n'
+    dockerfile += f"\n{repo_script}\n" if repo_script else ""
+    dockerfile += "\nWORKDIR /testbed/\n"
+    return dockerfile

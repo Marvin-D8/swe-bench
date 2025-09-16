@@ -4,20 +4,16 @@ import docker
 import docker.errors
 import logging
 import subprocess
-import sys
-import traceback
 
-from pathlib import Path
 
 from swebench.image_builder.constants import (
     IMAGE_BUILDER_LOG_DIR,
 )
 from swebench.image_builder.docker_utils import remove_image
 from swebench.image_builder.image_spec import (
-    make_image_spec,
     ImageSpec,
 )
-from swebench.harness.utils import ansi_escape, run_threadpool
+from swebench.harness.utils import run_threadpool
 from swebench.logger import setup_logger, close_logger
 
 
@@ -89,34 +85,21 @@ def build_image(
             cmd.append(str(dockerfile_path.parent))
 
             logger.info(f"Executing: {' '.join(cmd)}")
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True,
-            )
 
-            buildlog = ""
-            # Stream output line by line (similar to original)
-            for line in process.stdout:
-                line = line.rstrip()
-                if line:
-                    # Remove ANSI codes from the log (same as original)
-                    clean_line = ansi_escape(line)
-                    logger.info(clean_line)
-                    buildlog += line + "\n"
-
-            # Wait for process to complete
-            return_code = process.wait()
+            with open(logger.log_file, "a+") as log_file:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                return_code = process.wait()
 
             if return_code == 0:
                 logger.info("Image built successfully!")
             else:
                 error_msg = f"Docker buildx failed with exit code {return_code}"
                 logger.error(error_msg)
-                logger.error(f"Build log:\n{buildlog}")
                 raise BuildImageError(image_spec.name, error_msg, logger)
         else:
             logger.info("Build context created successfully!")
@@ -192,7 +175,6 @@ def build_instance_image(
     if not image_exists:
         build_image(
             image_spec=image_spec,
-            client=client,
             nocache=nocache,
             dry_run=dry_run,
         )
