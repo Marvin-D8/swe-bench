@@ -7,7 +7,6 @@ OG_SWE_BENCH_DATASETS = {
     "SWE-bench/SWE-bench",
     "SWE-bench/SWE-bench_Lite",
     "SWE-bench/SWE-bench_Verified",
-    "SWE-bench/SWE-bench_Multimodal",
     "princeton-nlp/SWE-bench",
     "princeton-nlp/SWE-bench_Lite",
     "princeton-nlp/SWE-bench_Verified",
@@ -28,9 +27,11 @@ def get_dockerfile(instance: dict, dataset_name: str) -> str:
 
         return _get_dockerfile(instance)
     elif dataset_name in SWE_BENCH_MULTIMODAL_DATASETS:
-        raise ValueError("Multimodal datasets are not supported yet")
-        # from swebench.image_builder.dockerfile_gen._swebench_multimodal import _get_dockerfile
-        # return _get_dockerfile(instance)
+        from swebench.image_builder.dockerfile_gen._swebench_multimodal import (
+            _get_dockerfile,
+        )
+
+        return _get_dockerfile(instance)
     elif dataset_name == "SWE-bench/SWE-bench_Multilingual":
         from swebench.image_builder.dockerfile_gen._swebench_multilingual import (
             _get_dockerfile,

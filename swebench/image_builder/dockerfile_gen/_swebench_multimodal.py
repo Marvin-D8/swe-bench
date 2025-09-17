@@ -1,11 +1,11 @@
 _DOCKERFILE_BASE_JS = r"""
-FROM --platform={platform} ubuntu:{ubuntu_version}
+FROM --platform=linux/amd64 ubuntu:jammy
 
 ARG DEBIAN_FRONTEND=noninteractive
-ENV TZ=Etc/UTC
-RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 
-# Install necessary packages
+ENV TZ=Etc/UTC
+
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -21,8 +21,6 @@ RUN apt-get update && apt-get install -y \
     imagemagick \
     && apt-get -y autoclean \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Chrome
 RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
@@ -31,13 +29,10 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
         --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Install NVM
 ENV NVM_DIR /usr/local/nvm
 
 RUN mkdir -p $NVM_DIR
 RUN curl --silent -o- https://raw.githubusercontent.com/creationix/nvm/v0.39.3/install.sh | bash
-
-# Install necessary libraries for Chrome
 RUN apt-get update && apt-get install -y \
     procps \
     libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 \
@@ -47,89 +42,135 @@ RUN apt-get update && apt-get install -y \
     && apt-get -y autoclean \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up Chrome for running in a container
 ENV CHROME_BIN /usr/bin/google-chrome
 RUN echo "CHROME_BIN=$CHROME_BIN" >> /etc/environment
-
-# Set DBUS for Chrome
 RUN mkdir -p /run/dbus
+
 ENV DBUS_SESSION_BUS_ADDRESS="unix:path=/run/dbus/system_bus_socket"
+
 RUN dbus-daemon --system --fork
 
-# If puppeteer is used, make it use the installed Chrome, not download its own
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-
-# Fix for PhantomJS runs (used by older task instances)
 ENV OPENSSL_CONF /etc/ssl
 
-# Add a non-root user to run Chrome
 RUN useradd -m chromeuser
+
 USER chromeuser
+
 WORKDIR /home/chromeuser
 
-# Switch back to root for any further commands
 USER root
 """
 
-_DOCKERFILE_ENV_JS = r"""FROM --platform={platform} {base_image_key}
+from swebench.data_specs.javascript import MAP_REPO_VERSION_TO_SPECS_JS
 
-ARG DEBIAN_FRONTEND=noninteractive
-ENV TZ=Etc/UTC
 
-COPY ./setup_env.sh /root/
-RUN sed -i -e 's/\r$//' /root/setup_env.sh
-RUN chmod +x /root/setup_env.sh
+def make_heredoc_run_command(commands):
+    """Helper to create RUN commands with heredoc syntax"""
+    if not commands:
+        return ""
+    delimiter = "EOF"
+    command_str = "\n".join(commands)
+    return f"RUN <<{delimiter}\n{command_str}\n{delimiter}"
 
-# Install Node
-ENV NODE_VERSION {node_version}
-RUN source $NVM_DIR/nvm.sh \
-    && nvm install $NODE_VERSION \
-    && nvm alias default $NODE_VERSION \
-    && nvm use default
 
-# Install Python
-RUN add-apt-repository ppa:deadsnakes/ppa && apt-get update && apt-get install -y python{python_version}
-RUN ln -s /usr/bin/python{python_version} /usr/bin/python
+def make_repo_script_list(specs, repo, base_commit):
+    """
+    Clone the repository and set up the codebase.
+    """
+    commands = [
+        f"git clone https://github.com/{repo}.git /testbed",
+        "cd /testbed",
+        f"git reset --hard {base_commit}",
+        "git clean -fdxq",
+    ]
+    return make_heredoc_run_command(commands)
 
-# Install Python2
-RUN apt-get install -y python2
 
-# Set up environment variables for Node
-ENV NODE_PATH $NVM_DIR/v$NODE_VERSION/lib/node_modules
-ENV PATH $NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH
-RUN echo "PATH=$PATH:/usr/local/nvm/versions/node/$NODE_VERSION/bin/node" >> /etc/environment
+def make_env_script_list(instance, specs):
+    """
+    Set up the JavaScript/Node.js environment with required dependencies.
+    """
+    commands = []
 
-# Install pnpm
-ENV PNPM_VERSION {pnpm_version}
-ENV PNPM_HOME /usr/local/pnpm
-ENV PATH $PNPM_HOME:$PATH
+    # Install additional apt packages if specified
+    if "apt-pkgs" in specs:
+        apt_packages = " ".join(specs["apt-pkgs"])
+        commands.extend(
+            [
+                "apt-get update",
+                f"apt-get install -y {apt_packages}",
+                "rm -rf /var/lib/apt/lists/*",
+            ]
+        )
 
-RUN mkdir -p $PNPM_HOME && \
-    wget -qO $PNPM_HOME/pnpm "https://github.com/pnpm/pnpm/releases/download/v$PNPM_VERSION/pnpm-linux-x64" && \
-    chmod +x $PNPM_HOME/pnpm && \
-    ln -s $PNPM_HOME/pnpm /usr/local/bin/pnpm
+    # Set up Node.js version from docker_specs
+    docker_specs = specs.get("docker_specs", {})
+    node_version = docker_specs.get("node_version", "18.17.1")  # default fallback
+    pnpm_version = docker_specs.get("pnpm_version", "8.6.12")  # default fallback
+    python_version = docker_specs.get("python_version", "3.9")  # default fallback
 
-RUN echo "export PNPM_HOME=$PNPM_HOME" >> /etc/profile && \
-    echo "export PATH=\$PNPM_HOME:\$PATH" >> /etc/profile
+    # Install Node.js
+    commands.extend(
+        [
+            f"export NODE_VERSION={node_version}",
+            "source $NVM_DIR/nvm.sh",
+            "nvm install $NODE_VERSION",
+            "nvm alias default $NODE_VERSION",
+            "nvm use default",
+        ]
+    )
 
-# Run the setup script
-RUN /bin/bash -c "source ~/.bashrc && /root/setup_env.sh"
-RUN node -v
-RUN npm -v
-RUN pnpm -v
-RUN python -V
-RUN python2 -V
+    # Set environment variables
+    commands.extend(
+        [
+            f"export NODE_PATH=$NVM_DIR/v{node_version}/lib/node_modules",
+            f"export PATH=$NVM_DIR/versions/node/v{node_version}/bin:$PATH",
+        ]
+    )
 
-WORKDIR /testbed/
-"""
+    # Install pnpm if specified
+    if "pnpm_version" in docker_specs:
+        commands.extend(
+            [
+                f"export PNPM_VERSION={pnpm_version}",
+                "export PNPM_HOME=/usr/local/pnpm",
+                "export PATH=$PNPM_HOME:$PATH",
+                "mkdir -p $PNPM_HOME",
+                'wget -qO $PNPM_HOME/pnpm "https://github.com/pnpm/pnpm/releases/download/v$PNPM_VERSION/pnpm-linux-x64"',
+                "chmod +x $PNPM_HOME/pnpm",
+                "ln -s $PNPM_HOME/pnpm /usr/local/bin/pnpm",
+            ]
+        )
 
-_DOCKERFILE_INSTANCE_JS = r"""FROM --platform={platform} {env_image_name}
+    # Install Python if needed
+    commands.extend(
+        [
+            "add-apt-repository ppa:deadsnakes/ppa",
+            "apt-get update",
+            f"apt-get install -y python{python_version}",
+            f"ln -sf /usr/bin/python{python_version} /usr/bin/python",
+        ]
+    )
 
-COPY ./setup_repo.sh /root/
-RUN sed -i -e 's/\r$//' /root/setup_repo.sh
-RUN node -v
-RUN npm -v
-RUN /bin/bash /root/setup_repo.sh
+    return make_heredoc_run_command(commands)
 
-WORKDIR /testbed/
-"""
+
+def _get_dockerfile(instance) -> str:
+    """
+    Generate a monolithic Dockerfile for SWE-bench Multimodal instances.
+    This combines the base image, environment setup, and repository setup into a single Dockerfile.
+    """
+    repo = instance["repo"]
+    version = instance.get("version")
+    base_commit = instance["base_commit"]
+    specs = MAP_REPO_VERSION_TO_SPECS_JS[repo][version]
+    dockerfile = _DOCKERFILE_BASE_JS
+    env_script = make_env_script_list(instance, specs)
+    if env_script:
+        dockerfile += f"\n{env_script}\n"
+    repo_script = make_repo_script_list(specs, repo, base_commit)
+    if repo_script:
+        dockerfile += f"\n{repo_script}\n"
+    dockerfile += "\nWORKDIR /testbed/\n"
+    return dockerfile
