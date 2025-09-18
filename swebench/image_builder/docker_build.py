@@ -131,7 +131,7 @@ def build_instance_images(
     """
     if force_rebuild:
         for spec in image_specs:
-            remove_image(client, spec.instance_image_key, "quiet")
+            remove_image(client, spec.name, "quiet")
     successful, failed = list(), list()
     payloads = [(spec, client, None, False, dry_run) for spec in image_specs]
     successful, failed = run_threadpool(build_instance_image, payloads, max_workers)

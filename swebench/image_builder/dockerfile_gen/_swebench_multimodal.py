@@ -74,26 +74,15 @@ def make_heredoc_run_command(commands):
     return f"RUN <<{delimiter}\n{command_str}\n{delimiter}"
 
 
-def make_repo_script_list(specs, repo, base_commit):
-    """
-    Clone the repository and set up the codebase.
-    """
-    commands = [
-        f"git clone https://github.com/{repo}.git /testbed",
-        "cd /testbed",
-        f"git reset --hard {base_commit}",
-        "git clean -fdxq",
-    ]
-    return make_heredoc_run_command(commands)
-
-
 def make_env_script_list(instance, specs):
     """
     Set up the JavaScript/Node.js environment with required dependencies.
     """
+    docker_specs = specs.get("docker_specs", {})
+    node_version = docker_specs.get("node_version", "18.17.1")
+    pnpm_version = docker_specs.get("pnpm_version", None)
+    python_version = docker_specs.get("python_version", "3.9")
     commands = []
-
-    # Install additional apt packages if specified
     if "apt-pkgs" in specs:
         apt_packages = " ".join(specs["apt-pkgs"])
         commands.extend(
@@ -103,14 +92,6 @@ def make_env_script_list(instance, specs):
                 "rm -rf /var/lib/apt/lists/*",
             ]
         )
-
-    # Set up Node.js version from docker_specs
-    docker_specs = specs.get("docker_specs", {})
-    node_version = docker_specs.get("node_version", "18.17.1")  # default fallback
-    pnpm_version = docker_specs.get("pnpm_version", "8.6.12")  # default fallback
-    python_version = docker_specs.get("python_version", "3.9")  # default fallback
-
-    # Install Node.js
     commands.extend(
         [
             f"export NODE_VERSION={node_version}",
@@ -120,30 +101,6 @@ def make_env_script_list(instance, specs):
             "nvm use default",
         ]
     )
-
-    # Set environment variables
-    commands.extend(
-        [
-            f"export NODE_PATH=$NVM_DIR/v{node_version}/lib/node_modules",
-            f"export PATH=$NVM_DIR/versions/node/v{node_version}/bin:$PATH",
-        ]
-    )
-
-    # Install pnpm if specified
-    if "pnpm_version" in docker_specs:
-        commands.extend(
-            [
-                f"export PNPM_VERSION={pnpm_version}",
-                "export PNPM_HOME=/usr/local/pnpm",
-                "export PATH=$PNPM_HOME:$PATH",
-                "mkdir -p $PNPM_HOME",
-                'wget -qO $PNPM_HOME/pnpm "https://github.com/pnpm/pnpm/releases/download/v$PNPM_VERSION/pnpm-linux-x64"',
-                "chmod +x $PNPM_HOME/pnpm",
-                "ln -s $PNPM_HOME/pnpm /usr/local/bin/pnpm",
-            ]
-        )
-
-    # Install Python if needed
     commands.extend(
         [
             "add-apt-repository ppa:deadsnakes/ppa",
@@ -152,7 +109,61 @@ def make_env_script_list(instance, specs):
             f"ln -sf /usr/bin/python{python_version} /usr/bin/python",
         ]
     )
+    commands.append("apt-get install -y python2")
+    commands.extend(
+        [
+            f'echo "export NODE_PATH=$NVM_DIR/v{node_version}/lib/node_modules" >> /etc/environment',
+            f'echo "export PATH=$NVM_DIR/versions/node/v{node_version}/bin:$PATH" >> /etc/environment',
+        ]
+    )
+    if pnpm_version:
+        commands.extend(
+            [
+                f"export PNPM_VERSION={pnpm_version}",
+                "export PNPM_HOME=/usr/local/pnpm",
+                "mkdir -p $PNPM_HOME",
+                'wget -qO $PNPM_HOME/pnpm "https://github.com/pnpm/pnpm/releases/download/v$PNPM_VERSION/pnpm-linux-x64"',
+                "chmod +x $PNPM_HOME/pnpm",
+                "ln -s $PNPM_HOME/pnpm /usr/local/bin/pnpm",
+                'echo "export PNPM_HOME=$PNPM_HOME" >> /etc/profile',
+                'echo "export PATH=$PNPM_HOME:$PATH" >> /etc/profile',
+            ]
+        )
+    commands.extend(
+        [
+            "source $NVM_DIR/nvm.sh && node -v",
+            "source $NVM_DIR/nvm.sh && npm -v",
+            "python -V",
+            "python2 -V",
+        ]
+    )
+    if pnpm_version:
+        commands.append("pnpm -v")
 
+    return make_heredoc_run_command(commands)
+
+
+def make_repo_script_list(specs, repo, base_commit):
+    """
+    Clone the repository, install dependencies, and run any build commands.
+    """
+    commands = [
+        f"git clone https://github.com/{repo}.git /testbed",
+        "cd /testbed",
+        f"git reset --hard {base_commit}",
+        "git clean -fdxq",
+    ]
+    commands.append("source $NVM_DIR/nvm.sh")
+    if "install" in specs:
+        install_commands = specs["install"]
+        if isinstance(install_commands, str):
+            install_commands = [install_commands]
+        commands.extend(install_commands)
+    if "build" in specs:
+        build_commands = specs["build"]
+        if isinstance(build_commands, str):
+            build_commands = [build_commands]
+        commands.extend(build_commands)
     return make_heredoc_run_command(commands)
 
 
@@ -165,12 +176,37 @@ def _get_dockerfile(instance) -> str:
     version = instance.get("version")
     base_commit = instance["base_commit"]
     specs = MAP_REPO_VERSION_TO_SPECS_JS[repo][version]
+
+    # Start with base image
     dockerfile = _DOCKERFILE_BASE_JS
+
+    # Add Docker ENV statements for proper environment variable persistence
+    docker_specs = specs.get("docker_specs", {})
+    node_version = docker_specs.get("node_version", "18.17.1")
+    pnpm_version = docker_specs.get("pnpm_version", None)
+
+    # Set ENV variables for Node.js
+    dockerfile += f"\nENV NODE_VERSION {node_version}\n"
+    dockerfile += "ENV NODE_PATH $NVM_DIR/v$NODE_VERSION/lib/node_modules\n"
+    dockerfile += "ENV PATH $NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH\n"
+
+    # Set ENV variables for pnpm if needed
+    if pnpm_version:
+        dockerfile += f"ENV PNPM_VERSION {pnpm_version}\n"
+        dockerfile += "ENV PNPM_HOME /usr/local/pnpm\n"
+        dockerfile += "ENV PATH $PNPM_HOME:$PATH\n"
+
+    # Add environment setup (Node.js installation, Python, dependencies)
     env_script = make_env_script_list(instance, specs)
     if env_script:
         dockerfile += f"\n{env_script}\n"
+
+    # Add repository setup (clone, install, build)
     repo_script = make_repo_script_list(specs, repo, base_commit)
     if repo_script:
         dockerfile += f"\n{repo_script}\n"
+
+    # Set final working directory
     dockerfile += "\nWORKDIR /testbed/\n"
+
     return dockerfile
