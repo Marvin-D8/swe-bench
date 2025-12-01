@@ -92,7 +92,7 @@ pip install -e .
 
 ## 💫 Contributing
 
-We welcome contributions from the NLP, Machine Learning, and Software Engineering communities! Please check our [contributing guidelines](https://github.com/princeton-nlp/SWE-bench/blob/main/CONTRIBUTING.md) for details.
+We welcome contributions from the NLP, Machine Learning, and Software Engineering communities! Please check our [contributing guidelines](https://github.com/princeton-nlp/SWE-bench/blob/main/docs/README.md) for details.
 
 ## ✍️ Citation
 
