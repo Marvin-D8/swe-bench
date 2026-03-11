@@ -149,7 +149,7 @@ def main(
     """
     # Set open file limit
     resource.setrlimit(resource.RLIMIT_NOFILE, (open_file_limit, open_file_limit))
-    client = docker.from_env()
+    client = docker.from_env(timeout=600)
 
     # Load pre-generated dockerfiles
     with resolve_dockerfile_repo(dockerfile_repo) as repo_path:

@@ -86,13 +86,38 @@ def create_container(
         logger.info(f"Creating container for {test_spec.instance_id}...")
 
         container_name = f"sweb.eval.{test_spec.instance_id.lower()}.{run_id}"
-        container = client.containers.create(
-            image=test_spec.image,
-            name=container_name,
-            user=CONTAINER_USER,
-            detach=True,
-            command="tail -f /dev/null",
-        )
+        # Remove any existing container with this name (handles ghost containers)
+        try:
+            old = client.containers.get(container_name)
+            old.remove(force=True)
+            logger.info(f"Removed existing container {container_name}")
+        except docker.errors.NotFound:
+            pass
+        except Exception:
+            pass
+        try:
+            container = client.containers.create(
+                image=test_spec.image,
+                name=container_name,
+                user=CONTAINER_USER,
+                detach=True,
+                command="tail -f /dev/null",
+            )
+        except docker.errors.APIError as e:
+            if "409" in str(e) or "Conflict" in str(e):
+                # Ghost container — use a unique suffix
+                import time
+                container_name = f"{container_name}.{int(time.time())}"
+                logger.info(f"Retrying with unique name: {container_name}")
+                container = client.containers.create(
+                    image=test_spec.image,
+                    name=container_name,
+                    user=CONTAINER_USER,
+                    detach=True,
+                    command="tail -f /dev/null",
+                )
+            else:
+                raise
         logger.info(f"Container for {test_spec.instance_id} created: {container.id}")
         return container
     except Exception as e:
@@ -109,6 +134,7 @@ def run_instance(
     run_id: str,
     timeout: int | None = None,
     rewrite_reports: bool = False,
+    skip_patch: bool = False,
 ):
     """
     Run a single instance with the given prediction.
@@ -120,6 +146,7 @@ def run_instance(
         run_id (str): Run ID
         timeout (int): Timeout for running tests
         rewrite_reports (bool): True if eval run is just to reformat existing report
+        skip_patch (bool): True to skip applying model patch (negative test mode)
     """
     # Set up logging directory
     instance_id = test_spec.instance_id
@@ -158,35 +185,38 @@ def run_instance(
         container.start()
         logger.info(f"Container for {instance_id} started: {container.id}")
 
-        # Copy model prediction as patch file to container
-        patch_file = Path(log_dir / "patch.diff")
-        patch_file.write_text(pred["model_patch"] or "")
-        logger.info(
-            f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
-        )
-        copy_to_container(container, patch_file, PurePosixPath(CONTAINER_PATCH_FILE))
+        if not skip_patch:
+            # Copy model prediction as patch file to container
+            patch_file = Path(log_dir / "patch.diff")
+            patch_file.write_text(pred["model_patch"] or "")
+            logger.info(
+                f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
+            )
+            copy_to_container(container, patch_file, PurePosixPath(CONTAINER_PATCH_FILE))
 
-        # Attempt to apply patch to container (TODO: test this)
-        applied_patch = False
-        for git_apply_cmd in GIT_APPLY_CMDS:
-            val = container.exec_run(
-                f"{git_apply_cmd} {CONTAINER_PATCH_FILE}",
-                workdir=CONTAINER_WORKDIR,
-                user=CONTAINER_USER,
-            )
-            if val.exit_code == 0:
-                logger.info(f"{APPLY_PATCH_PASS}:\n{val.output.decode('utf-8')}")
-                applied_patch = True
-                break
-            else:
-                logger.info(f"Failed to apply patch to container: {git_apply_cmd}")
-        if not applied_patch:
-            logger.info(f"{APPLY_PATCH_FAIL}:\n{val.output.decode('utf-8')}")
-            raise EvaluationError(
-                instance_id,
-                f"{APPLY_PATCH_FAIL}:\n{val.output.decode('utf-8')}",
-                logger,
-            )
+            # Attempt to apply patch to container (TODO: test this)
+            applied_patch = False
+            for git_apply_cmd in GIT_APPLY_CMDS:
+                val = container.exec_run(
+                    f"{git_apply_cmd} {CONTAINER_PATCH_FILE}",
+                    workdir=CONTAINER_WORKDIR,
+                    user=CONTAINER_USER,
+                )
+                if val.exit_code == 0:
+                    logger.info(f"{APPLY_PATCH_PASS}:\n{val.output.decode('utf-8')}")
+                    applied_patch = True
+                    break
+                else:
+                    logger.info(f"Failed to apply patch to container: {git_apply_cmd}")
+            if not applied_patch:
+                logger.info(f"{APPLY_PATCH_FAIL}:\n{val.output.decode('utf-8')}")
+                raise EvaluationError(
+                    instance_id,
+                    f"{APPLY_PATCH_FAIL}:\n{val.output.decode('utf-8')}",
+                    logger,
+                )
+        else:
+            logger.info(f"Skipping model patch for {instance_id} (--no-patch mode)")
 
         # Get git diff before running eval script
         git_diff_output_before = (
@@ -278,6 +308,7 @@ def run_instances(
     run_id: str,
     timeout: int,
     rewrite_reports: bool = False,
+    skip_patch: bool = False,
 ):
     """
     Run all instances for the given predictions in parallel.
@@ -291,7 +322,7 @@ def run_instances(
         timeout (int): Timeout for running tests
         rewrite_reports (bool): True if eval run is just to reformat existing report
     """
-    client = docker.from_env()
+    client = docker.from_env(timeout=1800)
     test_specs = [make_test_spec(instance) for instance in instances]
 
     # run instances in parallel
@@ -305,6 +336,7 @@ def run_instances(
                 run_id,
                 timeout,
                 rewrite_reports,
+                skip_patch,
             )
         )
 
@@ -466,7 +498,7 @@ def main(
     # run instances locally
     if platform.system() == "Linux":
         resource.setrlimit(resource.RLIMIT_NOFILE, (open_file_limit, open_file_limit))
-    client = docker.from_env()
+    client = docker.from_env(timeout=1800)
 
     if not dataset:
         print("No instances to run.")
