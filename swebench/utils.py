@@ -43,6 +43,20 @@ def get_modified_files(patch: str) -> list[str]:
     return source_files
 
 
+def get_new_files(patch: str) -> list[str]:
+    """
+    Get the list of newly created files in a patch (source is /dev/null).
+    """
+    new_files = []
+    for file in PatchSet(patch):
+        if file.source_file == "/dev/null":
+            target = file.target_file
+            if target.startswith("b/"):
+                target = target[2:]
+            new_files.append(target)
+    return new_files
+
+
 def ansi_escape(text: str) -> str:
     """
     Remove ANSI codes from text

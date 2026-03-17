@@ -19,9 +19,9 @@ from datasets import load_dataset
 # ---------------------------------------------------------------------------
 
 DOCKERFILE_REPOS = {
-    "og": Path("/home/ubuntu/code/swe-bench-dockerfiles"),
-    "multilingual": Path("/home/ubuntu/code/swe-bench-multilingual-dockerfiles"),
-    "multimodal": Path("/home/ubuntu/code/swe-bench-multimodal-dockerfiles"),
+    "og": Path("/home/azureuser/swe-bench-dockerfiles"),
+    "multilingual": Path("/home/azureuser/swe-bench-multilingual-dockerfiles"),
+    "multimodal": Path("/home/azureuser/swe-bench-multimodal-dockerfiles"),
 }
 
 # Inline script that loads a generator and produces eval scripts for a batch
@@ -271,7 +271,7 @@ def process_dataset(
 
 
 def main():
-    base_output = Path("/home/ubuntu/code/swe-bench/data")
+    base_output = Path("/home/azureuser/SWE-bench-v5/data")
 
     process_dataset(
         hf_name="SWE-bench/SWE-bench",

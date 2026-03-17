@@ -3,7 +3,7 @@ Type definitions for swebench.
 """
 
 from typing import TypedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 class SWEbenchInstance(TypedDict):
@@ -37,6 +37,7 @@ class TestSpec:
     PASS_TO_PASS: list[str]
     log_parser: str = ""
     eval_type: str = ""
+    test_patch_new_files: list[str] = field(default_factory=list)
 
     @property
     def eval_script(self):

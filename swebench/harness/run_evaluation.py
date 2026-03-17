@@ -188,6 +188,20 @@ def run_instance(
                 logger,
             )
 
+        # Remove any model-created files that overlap with test_patch new files.
+        # Prevents test poisoning (see github.com/SWE-bench/SWE-bench/issues/538).
+        if test_spec.test_patch_new_files:
+            for f in test_spec.test_patch_new_files:
+                container.exec_run(
+                    f"rm -f {f}",
+                    workdir=CONTAINER_WORKDIR,
+                    user=CONTAINER_USER,
+                )
+            logger.info(
+                f"Cleaned {len(test_spec.test_patch_new_files)} test_patch new file(s) "
+                f"to prevent poisoning: {test_spec.test_patch_new_files}"
+            )
+
         # Get git diff before running eval script
         git_diff_output_before = (
             container.exec_run(

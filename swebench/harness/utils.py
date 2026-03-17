@@ -9,6 +9,7 @@ from pathlib import Path
 from tqdm import tqdm
 from typing import cast
 from swebench.types import SWEbenchInstance, TestSpec
+from swebench.utils import get_new_files
 
 
 load_dotenv()
@@ -204,6 +205,7 @@ def make_test_spec(instance: dict) -> TestSpec:
     """
     f2p = instance["FAIL_TO_PASS"]
     p2p = instance["PASS_TO_PASS"]
+    test_patch = instance.get("test_patch", "")
     return TestSpec(
         instance_id=instance["instance_id"],
         image=instance["image"],
@@ -214,4 +216,5 @@ def make_test_spec(instance: dict) -> TestSpec:
         PASS_TO_PASS=json.loads(p2p) if isinstance(p2p, str) else p2p,
         log_parser=instance["log_parser"],
         eval_type=instance["eval_type"],
+        test_patch_new_files=get_new_files(test_patch) if test_patch else [],
     )
