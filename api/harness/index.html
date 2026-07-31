@@ -23423,7 +23423,10 @@ Returns only the environment images that need to be built.</p>
 <span class="normal">464</span>
 <span class="normal">465</span>
 <span class="normal">466</span>
-<span class="normal">467</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">build_instance_image</span><span class="p">(</span>
+<span class="normal">467</span>
+<span class="normal">468</span>
+<span class="normal">469</span>
+<span class="normal">470</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">build_instance_image</span><span class="p">(</span>
     <span class="n">test_spec</span><span class="p">:</span> <span class="n">TestSpec</span><span class="p">,</span>
     <span class="n">client</span><span class="p">:</span> <span class="n">docker</span><span class="o">.</span><span class="n">DockerClient</span><span class="p">,</span>
     <span class="n">logger</span><span class="p">:</span> <span class="n">logging</span><span class="o">.</span><span class="n">Logger</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
@@ -23476,6 +23479,9 @@ Returns only the environment images that need to be built.</p>
 
     <span class="c1"># Build the instance image</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">image_exists</span><span class="p">:</span>
+        <span class="c1"># Check for specific instance ID and install specific version of antlr4-python3-runtime</span>
+        <span class="k">if</span> <span class="n">test_spec</span><span class="o">.</span><span class="n">instance_id</span> <span class="o">==</span> <span class="s2">"sympy__sympy-21612"</span><span class="p">:</span>
+            <span class="n">test_spec</span><span class="o">.</span><span class="n">repo_script_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"python -m pip install antlr4-python3-runtime==4.7.2"</span><span class="p">)</span>
         <span class="n">build_image</span><span class="p">(</span>
             <span class="n">image_name</span><span class="o">=</span><span class="n">image_name</span><span class="p">,</span>
             <span class="n">setup_scripts</span><span class="o">=</span><span class="p">{</span>
@@ -23637,10 +23643,7 @@ Returns only the environment images that need to be built.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>swebench/harness/docker_build.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">470</span>
-<span class="normal">471</span>
-<span class="normal">472</span>
-<span class="normal">473</span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">473</span>
 <span class="normal">474</span>
 <span class="normal">475</span>
 <span class="normal">476</span>
@@ -23699,7 +23702,10 @@ Returns only the environment images that need to be built.</p>
 <span class="normal">529</span>
 <span class="normal">530</span>
 <span class="normal">531</span>
-<span class="normal">532</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">build_container</span><span class="p">(</span>
+<span class="normal">532</span>
+<span class="normal">533</span>
+<span class="normal">534</span>
+<span class="normal">535</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">build_container</span><span class="p">(</span>
     <span class="n">test_spec</span><span class="p">:</span> <span class="n">TestSpec</span><span class="p">,</span>
     <span class="n">client</span><span class="p">:</span> <span class="n">docker</span><span class="o">.</span><span class="n">DockerClient</span><span class="p">,</span>
     <span class="n">run_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
