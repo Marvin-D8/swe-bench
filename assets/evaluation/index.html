@@ -1090,6 +1090,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#evaluation-with-beam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🌩️ Evaluation with Beam
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1168,6 +1179,15 @@ This will execute the evaluation harness on Modal's cloud infrastructure, elimin
 <p>[!NOTE]
 Modal for SWE-bench Multimodal is currently experimental and may not be fully supported yet.</p>
 </blockquote>
+<h3 id="evaluation-with-beam">🌩️ Evaluation with Beam</h3>
+<p>You can also run evaluations entirely on the cloud using <a href="https://beam.cloud/">Beam</a> to avoid local setup and resource constraints:
+</p><div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>swebench.harness.run_evaluation<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--predictions_path<span class="w"> </span>gold<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--run_id<span class="w"> </span>validate-gold-beam<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--instance_ids<span class="w"> </span>sympy__sympy-20590<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--beam<span class="w"> </span><span class="nb">true</span>
+</code></pre></div>
+This will execute the evaluation harness on Beam's cloud infrastructure, eliminating the need for local Docker setup and resource management.<p></p>
 
 
 
